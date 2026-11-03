@@ -24,6 +24,8 @@ class Model(BaseModel):
         return f"{self.brand.name} {self.name}"
 
 class AssetStatus(models.TextChoices):
+    IN_MAINTENANCE = 'IN_MAINTENANCE', 'En Mantenimiento/Garantía'
+    DECOMMISSIONED = 'DECOMMISSIONED', 'Dado de Baja'
     AVAILABLE = 'AVAILABLE', 'Disponible'
     ASSIGNED = 'ASSIGNED', 'Asignado'
     MAINTENANCE = 'MAINTENANCE', 'En Mantenimiento'
