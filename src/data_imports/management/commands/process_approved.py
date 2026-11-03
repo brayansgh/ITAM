@@ -1,0 +1,94 @@
+from django.core.management.base import BaseCommand
+from django.db import transaction
+from data_imports.models import StagingAsset, ImportStatus
+from organizations.models import Company, Site, Area
+from employees.models import Employee
+from inventory.models import Category, Brand, Model, Asset, AssetSpecs, AssetNetwork
+
+class Command(BaseCommand):
+    help = 'Migra los registros aprobados de Staging a Producción'
+
+    def handle(self, *args, **kwargs):
+        approved = StagingAsset.objects.filter(status=ImportStatus.APPROVED).order_by('row_number')
+        count = approved.count()
+        
+        if count == 0:
+            self.stdout.write(self.style.WARNING("No hay registros marcados como 'Aprobado para Importar'."))
+            return
+            
+        self.stdout.write(f"Iniciando la migración de {count} registros aprobados...")
+        success_count = 0
+        error_count = 0
+        
+        current_asset_count = Asset.objects.count()
+        
+        for stg in approved:
+            try:
+                with transaction.atomic():
+                    # 1. Crear o recuperar Organizaciones
+                    comp_name = stg.company or 'Desconocida'
+                    comp, _ = Company.objects.get_or_create(name=comp_name, defaults={'code': comp_name[:3].upper()})
+                    
+                    site, _ = Site.objects.get_or_create(name=stg.site or 'Principal', company=comp)
+                    
+                    # CORRECCIÓN: El Área está vinculada a la Compañía, no a la Sede
+                    area, _ = Area.objects.get_or_create(name=stg.area or 'General', company=comp)
+                    
+                    # 2. Manejo inteligente de Empleados
+                    if stg.employee_name:
+                        if stg.employee_document:
+                            emp = Employee.objects.filter(document_number=stg.employee_document).first()
+                            if not emp:
+                                Employee.objects.create(
+                                    full_name=stg.employee_name, document_number=stg.employee_document,
+                                    company=comp, site=site, area=area
+                                )
+                        else:
+                            Employee.objects.get_or_create(
+                                full_name=stg.employee_name, company=comp,
+                                defaults={'site': site, 'area': area}
+                            )
+                    
+                    # 3. Clasificación del Inventario
+                    cat, _ = Category.objects.get_or_create(name=stg.element or 'Sin Categoría')
+                    brand, _ = Brand.objects.get_or_create(name=stg.brand or 'Genérica')
+                    model_obj, _ = Model.objects.get_or_create(name=stg.model or 'Genérico', brand=brand, category=cat)
+                    
+                    # 4. Generación del Código Interno
+                    current_asset_count += 1
+                    new_asset_tag = f"ACT-{current_asset_count:06d}"
+                    
+                    # 5. Creación del Activo Físico
+                    asset = Asset.objects.create(
+                        asset_tag=new_asset_tag,
+                        legacy_asset_tag=stg.legacy_asset_tag,
+                        serial_number=stg.serial_number,
+                        category=cat,
+                        model=model_obj,
+                        company=comp,
+                        site=site,
+                        status='ASSIGNED' if stg.employee_name else 'AVAILABLE',
+                        observations=stg.observations
+                    )
+                    
+                    # 6. Especificaciones técnicas y de red
+                    AssetSpecs.objects.create(
+                        asset=asset, ram=stg.ram, storage=stg.storage, 
+                        processor=stg.processor, operating_system=stg.operating_system
+                    )
+                    
+                    if stg.hostname or stg.mac_address:
+                        AssetNetwork.objects.create(
+                            asset=asset, hostname=stg.hostname, mac_address=stg.mac_address
+                        )
+                        
+                    # 7. Actualizar el estado en Staging
+                    stg.status = ImportStatus.IMPORTED
+                    stg.save()
+                    success_count += 1
+                    
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Error fila {stg.row_number} (Placa {stg.legacy_asset_tag}): {e.__class__.__name__} - {str(e)}"))
+                error_count += 1
+
+        self.stdout.write(self.style.SUCCESS(f"Migración completada: {success_count} exitosos, {error_count} errores."))
