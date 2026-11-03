@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: letter portrait; margin: 1.5cm; }
+        body { font-family: Arial, sans-serif; font-size: 10px; color: #000; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+        th, td { border: 1px solid #000; padding: 4px; text-align: left; vertical-align: middle; }
+        .text-center { text-align: center; }
+        .bold { font-weight: bold; }
+        .bg-gray { background-color: #f2f2f2; }
+        
+        .header-table th { font-size: 12px; }
+        .header-table img { max-height: 50px; max-width: 120px; }
+        
+        .policies { font-size: 9px; margin-top: 10px; margin-bottom: 15px; }
+        .policies h4 { text-align: center; margin-bottom: 5px; font-size: 11px; }
+        .policies ol { padding-left: 20px; margin: 0; }
+        .policies li { margin-bottom: 3px; text-align: justify; }
+        
+        .signature-table td { height: 60px; vertical-align: bottom; text-align: center; padding-bottom: 5px; }
+        .signature-title { font-size: 9px; font-weight: bold; background-color: #f2f2f2; height: 15px !important; vertical-align: middle !important; }
+    </style>
+</head>
+<body>
+
+    <table class="header-table">
+        <tr>
+            <td class="text-center" width="25%"><img src="{{ logo_acepalma }}" alt="Acepalma"></td>
+            <th class="text-center" width="50%">CONTROL Y ENTREGA DE ACTIVOS TECNOLÓGICOS</th>
+            <td class="text-center" width="25%">
+                <img src="{{ logo_solutrans }}" alt="Solutrans"><br>
+                <span style="font-size:8px;">GI-FR-05<br>Versión 001</span>
+            </td>
+        </tr>
+    </table>
+
+    <table>
+        <tr class="bg-gray bold text-center">
+            <td width="33%">COMPAÑÍA</td><td width="33%">ÁREA</td><td width="34%">SEDE</td>
+        </tr>
+        <tr class="text-center">
+            <td>{{ company.name|upper }}</td><td>{{ area.name|upper }}</td><td>{{ site.name|upper }}</td>
+        </tr>
+        <tr class="bg-gray bold text-center">
+            <td colspan="2">USUARIO</td><td>CÉDULA</td>
+        </tr>
+        <tr class="text-center">
+            <td colspan="2">{{ employee.full_name|upper }}</td><td>{{ employee.document_number|default:"N/A" }}</td>
+        </tr>
+    </table>
+
+    <table>
+        <tr class="bg-gray bold text-center">
+            <td width="20%">ELEMENTO</td><td width="20%">ACTIVO FIJO</td>
+            <td width="20%">MARCA</td><td width="20%">MODELO</td><td width="20%">SERIAL</td>
+        </tr>
+        {% for asg in assignments %}
+        <tr class="text-center">
+            <td>{{ asg.asset.category.name|upper }}</td>
+            <td>{{ asg.asset.legacy_asset_tag|default:asg.asset.asset_tag|upper }}</td>
+            <td>{{ asg.asset.model.brand.name|upper|default:"N/A" }}</td>
+            <td>{{ asg.asset.model.name|upper|default:"N/A" }}</td>
+            <td>{{ asg.asset.serial_number|upper|default:"N/A" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center">No hay activos registrados.</td></tr>
+        {% endfor %}
+    </table>
+
+    <table>
+        <tr>
+            <td width="20%" class="bg-gray bold text-center">FECHA DE ENTREGA</td>
+            <td width="80%">{{ date|upper }}</td>
+        </tr>
+        <tr>
+            <td class="bg-gray bold text-center">OBSERVACIONES</td>
+            <td>{{ observations|default:"ENTREGA DE ELEMENTOS TECNOLÓGICOS"|upper }}</td>
+        </tr>
+    </table>
+
+    <div class="policies">
+        <h4>POLÍTICAS DE SEGURIDAD INFORMÁTICA</h4>
+        <ol>
+            <li>Utilizar el equipo estrictamente para desempeñar las labores asociadas al cargo.</li>
+            <li>Notificar inmediatamente al área de Sistemas, incidencias con los equipos: fallas en funcionamiento, accidentes, pérdida o robo.</li>
+            <li>No cambiar las configuraciones establecidas de los computadores ni de los celulares corporativos.</li>
+            <li>Devolver todas las herramientas que me fueron asignadas en buen estado al momento de terminar la relación laboral, salvo el deterioro por uso.</li>
+            <li>No manipular, quitar, borrar las placas de los activos fijos que poseen los elementos entregados. En caso de desgaste o pérdida, notificar al área de Sistemas.</li>
+            <li>Está prohibido realizar modificaciones, alteraciones o instalaciones de hardware y software en los activos corporativos. Cualquier requerimiento de cambio, actualización o instalación de software debe ser canalizado y aprobado exclusivamente por el área de TI para garantizar la compatibilidad y seguridad del sistema.</li>
+            <li>Se prohíbe la conexión de dispositivos corporativos a redes Wi-Fi públicas, abiertas o no cifradas.</li>
+            <li>Todo equipo de cómputo deberá ser bloqueado o apagado cuando no esté en operación o el propietario se retire de su puesto de trabajo.</li>
+        </ol>
+    </div>
+
+    <table class="signature-table">
+        <tr>
+            <td class="signature-title" width="50%">PROCESO DE RECIBIDO Y ENTREGA</td>
+            <td class="signature-title" width="50%">FIRMA DE EMPLEADO QUE RECIBE</td>
+        </tr>
+        <tr>
+            <td>
+                <br><br><br>___________________________________<br>NOMBRE DE EMPLEADO (TEC) QUE ENTREGA<br>
+                <b>{{ assigned_by.get_full_name|default:assigned_by.username|upper }}</b>
+            </td>
+            <td>
+                <br><br><br>___________________________________<br><b>{{ employee.full_name|upper }}</b><br>
+                C.C. {{ employee.document_number|default:"N/A" }}
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
