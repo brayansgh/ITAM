@@ -1,3 +1,4 @@
+from simple_history.models import HistoricalRecords
 from django.db import models
 from core.models import BaseModel
 from organizations.models import Company, Site
@@ -15,7 +16,7 @@ class Brand(BaseModel):
     def __str__(self):
         return self.name
 
-class Model(BaseModel):
+class ModelAsset(BaseModel):
     brand = models.ForeignKey(Brand, on_delete=models.PROTECT, related_name='models')
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='models', null=True, blank=True)
     name = models.CharField(max_length=100)
@@ -39,12 +40,14 @@ class PropertyType(models.TextChoices):
     THIRD_PARTY = 'THIRD_PARTY', 'Terceros'
 
 class Asset(BaseModel):
+    history = HistoricalRecords()
+
     asset_tag = models.CharField(max_length=50, unique=True, help_text="Código interno único (ej. ACT-000001)")
     legacy_asset_tag = models.CharField(max_length=50, blank=True, null=True, help_text="Placa heredada del Excel")
     serial_number = models.CharField(max_length=100, blank=True, null=True)
     
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='assets')
-    model = models.ForeignKey(Model, on_delete=models.PROTECT, related_name='assets', null=True, blank=True)
+    model = models.ForeignKey(ModelAsset, on_delete=models.PROTECT, related_name='assets', null=True, blank=True)
     
     company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='assets_managed', help_text="Compañía que lo administra")
     owner_company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='assets_owned', help_text="Compañía dueña", null=True, blank=True)
@@ -70,6 +73,9 @@ class Asset(BaseModel):
         return f"{self.asset_tag} - {self.category.name}"
 
 class AssetSpecs(BaseModel):
+
+    def __str__(self):
+        return f"Especificaciones de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
     asset = models.OneToOneField(Asset, on_delete=models.CASCADE, related_name='specs')
     ram = models.CharField(max_length=50, blank=True, null=True)
     storage = models.CharField(max_length=50, blank=True, null=True)
@@ -77,6 +83,9 @@ class AssetSpecs(BaseModel):
     operating_system = models.CharField(max_length=100, blank=True, null=True)
 
 class AssetNetwork(BaseModel):
+
+    def __str__(self):
+        return f"Red de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
     asset = models.OneToOneField(Asset, on_delete=models.CASCADE, related_name='network')
     hostname = models.CharField(max_length=100, blank=True, null=True)
     mac_address = models.CharField(max_length=50, blank=True, null=True)
@@ -85,6 +94,9 @@ class AssetNetwork(BaseModel):
     operator = models.CharField(max_length=50, blank=True, null=True)
 
 class AssetWarranty(BaseModel):
+
+    def __str__(self):
+        return f"Garantía de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='warranties')
     supplier = models.CharField(max_length=150, blank=True, null=True)
     purchase_date = models.DateField(blank=True, null=True)
