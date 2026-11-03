@@ -10,62 +10,28 @@ class AssignmentStatus(models.TextChoices):
     TRANSFERRED = 'TRANSFERRED', 'Transferido a otro usuario'
 
 class Assignment(BaseModel):
-    # Relaciones protegidas contra borrado intencional (ISO 27001 A.8.1.1)
-    asset = models.ForeignKey(
-        Asset, 
-        on_delete=models.PROTECT, 
-        related_name='assignments',
-        verbose_name="Activo Tecnológico"
-    )
-    employee = models.ForeignKey(
-        Employee, 
-        on_delete=models.PROTECT, 
-        related_name='assignments',
-        verbose_name="Empleado Responsable"
-    )
-    assigned_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.PROTECT, 
-        related_name='created_assignments',
-        verbose_name="Asignado por (TI)"
-    )
-    
-    # Trazabilidad temporal
+    asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name='assignments', verbose_name="Activo Tecnológico")
+    employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name='assignments', verbose_name="Empleado Responsable")
+    assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='created_assignments', verbose_name="Asignado por (TI)")
     assigned_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Entrega")
     returned_at = models.DateTimeField(blank=True, null=True, verbose_name="Fecha de Devolución")
-    
-    # Estado de la asignación y custodia
-    status = models.CharField(
-        max_length=20, 
-        choices=AssignmentStatus.choices, 
-        default=AssignmentStatus.ACTIVE,
-        verbose_name="Estado"
-    )
-    
-    # Evidencia técnica y condiciones físicas
-    initial_condition = models.TextField(
-        help_text="Estado físico y funcional del equipo al momento de la entrega",
-        verbose_name="Condición de Entrega"
-    )
-    return_condition = models.TextField(
-        blank=True, null=True, 
-        help_text="Estado físico y funcional del equipo al momento de la devolución",
-        verbose_name="Condición de Devolución"
-    )
-    
+    status = models.CharField(max_length=20, choices=AssignmentStatus.choices, default=AssignmentStatus.ACTIVE, verbose_name="Estado")
+    initial_condition = models.TextField(help_text="Estado físico y funcional del equipo al momento de la entrega", verbose_name="Condición de Entrega")
+    return_condition = models.TextField(blank=True, null=True, help_text="Estado físico y funcional del equipo al momento de la devolución", verbose_name="Condición de Devolución")
     observations = models.TextField(blank=True, null=True, verbose_name="Observaciones / Pérdida / Daños")
-    
-    # Almacenamiento del Acta PDF generada (Para no repudio)
-    signed_act_pdf = models.FileField(
-        upload_to='actas_firmadas/%Y/%m/', 
-        blank=True, null=True, 
-        verbose_name="Acta de Entrega (PDF)"
-    )
+    signed_act_pdf = models.FileField(upload_to='actas_firmadas/%Y/%m/', blank=True, null=True, verbose_name="Acta de Entrega (PDF)")
 
     class Meta:
-        verbose_name = "Asignación de Activo"
-        verbose_name_plural = "Asignaciones de Activos"
+        verbose_name = "Historial de Asignación"
+        verbose_name_plural = "1. Historial de Asignaciones"
         ordering = ['-assigned_at']
 
     def __str__(self):
         return f"{self.asset.asset_tag} -> {self.employee.full_name} ({self.get_status_display()})"
+
+# NUEVO: Modelo Proxy para crear una vista agrupada por usuario sin duplicar tablas
+class EmployeeAssetSummary(Employee):
+    class Meta:
+        proxy = True
+        verbose_name = "Resumen por Usuario"
+        verbose_name_plural = "2. Resumen por Usuarios"
