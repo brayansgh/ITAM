@@ -1,3 +1,4 @@
+from simple_history.models import HistoricalRecords
 from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.conf import settings
@@ -17,6 +18,7 @@ class MaintenanceStatus(models.TextChoices):
     CANCELLED = 'CANCELLED', 'Cancelado'
 
 class MaintenanceRecord(BaseModel):
+    history = HistoricalRecords()
     asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name='maintenances', verbose_name="Activo Tecnológico")
     type = models.CharField(max_length=20, choices=MaintenanceType.choices, verbose_name="Tipo de Evento")
     status = models.CharField(max_length=20, choices=MaintenanceStatus.choices, default=MaintenanceStatus.OPEN, verbose_name="Estado del Ticket")
@@ -25,7 +27,6 @@ class MaintenanceRecord(BaseModel):
     provider = models.CharField(max_length=150, blank=True, null=True, verbose_name="Proveedor o Técnico Externo")
     cost = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Costo Total (COP)")
     resolution_notes = models.TextField(blank=True, null=True, verbose_name="Notas de Resolución o Diagnóstico")
-    support_document = models.FileField(upload_to='maintenance_docs/%Y/%m/', blank=True, null=True, validators=[FileExtensionValidator(allowed_extensions=['pdf'])], verbose_name="Documento Soporte (Factura/Acta Baja)")
 
     class Meta:
         verbose_name = "Mantenimiento / Baja"
@@ -45,3 +46,16 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from inventory.models import Asset
+
+class MaintenanceDocument(models.Model):
+    maintenance = models.ForeignKey(MaintenanceRecord, on_delete=models.CASCADE, related_name="documents")
+    document = models.FileField(
+        upload_to="maintenance_docs/%Y/%m/",
+        validators=[FileExtensionValidator(allowed_extensions=["pdf"])],
+        verbose_name="Acta / Evidencia",
+        help_text="⚠️ ATENCIÓN: Solo se admite formato PDF. (Máximo 3 archivos)"
+    )
+
+    class Meta:
+        verbose_name = "Documento Adjunto"
+        verbose_name_plural = "Documentos Adjuntos"

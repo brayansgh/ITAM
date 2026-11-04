@@ -1,36 +1,58 @@
 from django.contrib import admin
-from django.contrib import messages
-from .models import MaintenanceRecord, MaintenanceType, MaintenanceStatus
+from simple_history.admin import SimpleHistoryAdmin
+from dataclasses import dataclass
+from .models import MaintenanceRecord, MaintenanceDocument, MaintenanceStatus, MaintenanceType
+
+@dataclass
+class CustomChange:
+    field: str
+    old: str
+    new: str
+
+class MaintenanceDocumentInline(admin.TabularInline):
+    model = MaintenanceDocument
+    extra = 1
+    max_num = 3
 
 @admin.register(MaintenanceRecord)
-class MaintenanceRecordAdmin(admin.ModelAdmin):
-    list_display = ('asset', 'type', 'status', 'reported_by', 'cost', 'created_at')
-    list_filter = ('type', 'status', 'created_at')
-    search_fields = ('asset__asset_tag', 'asset__serial_number', 'provider', 'description')
-    autocomplete_fields = ['asset']
-    readonly_fields = ('reported_by',)
-    fieldsets = (
-        ('Información del Activo', {'fields': ('asset', 'type', 'status', 'description')}),
-        ('Gestión y Costos', {'fields': ('provider', 'cost', 'resolution_notes', 'support_document')}),
-        ('Auditoría', {'fields': ('reported_by',)}),
-    )
+class MaintenanceRecordAdmin(SimpleHistoryAdmin):
+    list_display = ('asset', 'type', 'status', 'reported_by')
+    list_filter = ('type', 'status')
+    search_fields = ('asset__asset_tag', 'description', 'provider')
+    inlines = [MaintenanceDocumentInline]
 
-    def save_model(self, request, obj, form, change):
-        # Auto-asignar el usuario logueado como el gestor del ticket
-        if not change:
-            obj.reported_by = request.user
-        super().save_model(request, obj, form, change)
+    def history_view(self, request, object_id, extra_context=None):
+        response = super().history_view(request, object_id, extra_context=extra_context)
+        
+        if hasattr(response, 'context_data') and 'action_list' in response.context_data:
+            STATUS_MAP = dict(MaintenanceStatus.choices)
+            TYPE_MAP = dict(MaintenanceType.choices)
+            
+            FIELD_MAP = {
+                'status': 'Estado del Ticket',
+                'type': 'Tipo de Evento',
+                'description': 'Descripción',
+                'provider': 'Proveedor',
+                'cost': 'Costo',
+                'resolution_notes': 'Notas de Resolución',
+            }
 
-        # Lógica de sincronización ISO 27001 con el inventario principal
-        try:
-            if obj.status in [MaintenanceStatus.OPEN, MaintenanceStatus.IN_PROGRESS]:
-                if obj.type == MaintenanceType.DECOMMISSION:
-                    obj.asset.status = 'DECOMMISSIONED'
-                else:
-                    obj.asset.status = 'IN_MAINTENANCE'
-            elif obj.status == MaintenanceStatus.COMPLETED:
-                if obj.type != MaintenanceType.DECOMMISSION:
-                    obj.asset.status = 'AVAILABLE' # Si se repara, vuelve a estar disponible
-            obj.asset.save()
-        except Exception as e:
-            messages.warning(request, f"Registro guardado, pero hubo un problema al actualizar el estado del activo: {e}")
+            for action in response.context_data['action_list']:
+                if hasattr(action, 'delta') and action.delta:
+                    translated_changes = []
+                    for change in action.delta.changes:
+                        field_label = FIELD_MAP.get(change.field, change.field)
+                        old_val = change.old
+                        new_val = change.new
+                        
+                        if change.field == 'status':
+                            old_val = STATUS_MAP.get(old_val, old_val)
+                            new_val = STATUS_MAP.get(new_val, new_val)
+                        elif change.field == 'type':
+                            old_val = TYPE_MAP.get(old_val, old_val)
+                            new_val = TYPE_MAP.get(new_val, new_val)
+                            
+                        translated_changes.append(CustomChange(field=field_label, old=old_val, new=new_val))
+                    
+                    action.delta.changes = translated_changes
+        return response
