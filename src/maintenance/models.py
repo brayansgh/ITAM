@@ -1,3 +1,4 @@
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.conf import settings
 from core.models import BaseModel
@@ -24,7 +25,7 @@ class MaintenanceRecord(BaseModel):
     provider = models.CharField(max_length=150, blank=True, null=True, verbose_name="Proveedor o Técnico Externo")
     cost = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Costo Total (COP)")
     resolution_notes = models.TextField(blank=True, null=True, verbose_name="Notas de Resolución o Diagnóstico")
-    support_document = models.FileField(upload_to='maintenance_docs/%Y/%m/', blank=True, null=True, verbose_name="Documento Soporte (Factura/Acta Baja)")
+    support_document = models.FileField(upload_to='maintenance_docs/%Y/%m/', blank=True, null=True, validators=[FileExtensionValidator(allowed_extensions=['pdf'])], verbose_name="Documento Soporte (Factura/Acta Baja)")
 
     class Meta:
         verbose_name = "Mantenimiento / Baja"
@@ -33,3 +34,14 @@ class MaintenanceRecord(BaseModel):
 
     def __str__(self):
         return f"{self.get_type_display()} - {self.asset.asset_tag}"
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth import get_user_model
+from inventory.models import Asset
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth import get_user_model
+from inventory.models import Asset
