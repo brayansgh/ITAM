@@ -103,3 +103,9 @@ class AssetWarranty(BaseModel):
     warranty_start = models.DateField(blank=True, null=True)
     warranty_end = models.DateField(blank=True, null=True)
     observations = models.TextField(blank=True, null=True)
+
+class DecommissionedAsset(Asset):
+    class Meta:
+        proxy = True
+        verbose_name = "Activo en Baja (Histórico)"
+        verbose_name_plural = "Activos en Baja (Histórico)"
