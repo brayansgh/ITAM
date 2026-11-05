@@ -14,11 +14,11 @@
         .header-table th { font-size: 12px; }
         .header-table img { max-height: 50px; max-width: 120px; }
         
-        .policies { font-size: 9px; margin-top: 10px; margin-bottom: 15px; }
-        .policies h4 { text-align: center; margin-bottom: 5px; font-size: 11px; }
-        .checklist-table td { border: 1px solid #ccc; padding: 4px; font-size: 9px; }
+        /* Estilos específicos para el Checklist */
+        .checklist-table td { font-size: 9px; padding: 3px 5px; }
+        .checkbox-cell { font-size: 12px; text-align: center; width: 5%; }
         
-        .signature-table td { height: 70px; vertical-align: bottom; text-align: center; padding-bottom: 5px; }
+        .signature-table td { height: 60px; vertical-align: bottom; text-align: center; padding-bottom: 5px; }
         .signature-title { font-size: 9px; font-weight: bold; background-color: #f2f2f2; height: 15px !important; vertical-align: middle !important; }
     </style>
 </head>
@@ -64,50 +64,90 @@
             <td>{{ asg.asset.serial_number|upper|default:"N/A" }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="text-center">No hay activos registrados o asignados.</td></tr>
+        <tr><td colspan="5" class="text-center">No hay activos registrados para devolver.</td></tr>
         {% endfor %}
     </table>
 
     <table>
         <tr>
-            <td width="20%" class="bg-gray bold text-center">FECHA DE DEVOLUCIÓN</td>
+            <td width="20%" class="bg-gray bold text-center">FECHA DE ENTREGA</td>
             <td width="80%">{{ date|upper }}</td>
         </tr>
         <tr>
             <td class="bg-gray bold text-center">OBSERVACIONES</td>
-            <td>{{ observations|upper }}</td>
+            <td>{{ observations|default:"DESVINCULACIÓN DE PERSONAL Y DEVOLUCIÓN DE ACTIVOS"|upper }}</td>
         </tr>
     </table>
 
-    <div class="policies">
-        <h4>CHECKLIST DE DESVINCULACIÓN</h4>
-        <table class="checklist-table">
-            {% for item in checklist_items %}
-            <tr>
-                <td width="90%">{{ item }}</td>
-                <td width="10%" class="text-center">[ &nbsp;&nbsp;&nbsp;&nbsp; ]</td>
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
+    <table class="checklist-table">
+        <tr>
+            <td colspan="2" class="bg-gray bold text-center">CHECKLIST DE DESVINCULACIÓN</td>
+        </tr>
+        <tr>
+            <td>Cambio de contraseñas de la cuenta de red en el Directorio Activo</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Bloqueo temporal del usuario en el Directorio Activo</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Cambiar el nombre de la cuenta de usuario como Disponible mas el nombre del cargo</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Verificar con Talento Humano el direccionamiento de correos hacia otro cargo</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Retirar el usuario propietario al equipo de cómputo en Intune</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Retiro de Licenciamiento de Defender for Endpoint</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Revoca los métodos de autenticación multifactor (MFA) registrados.</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Bloqueo de Usuario en SAP</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Se da por expirada la vigencia del usuario en SAP</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Retiro de Licenciamiento de SAP</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+        <tr>
+            <td>Retiro de Roles de SAP</td>
+            <td class="checkbox-cell">☐</td>
+        </tr>
+    </table>
 
     <table class="signature-table">
         <tr>
             <td class="signature-title" width="33%">FIRMA DE EMPLEADO QUE DEVUELVE</td>
-            <td class="signature-title" width="34%">TALENTO HUMANO</td>
-            <td class="signature-title" width="33%">FIRMA EMPLEADO TI QUE RECIBE</td>
+            <td class="signature-title" width="34%">NOMBRE DE EMPLEADO (TEC) QUE RECIBE</td>
+            <td class="signature-title" width="33%">EMPLEADO TALENTO HUMANO</td>
         </tr>
         <tr>
             <td>
-                <br><br><br>___________________________________<br><b>{{ employee.full_name|upper }}</b><br>
+                <br><br><br>___________________________________<br><br>
+                <b>{{ employee.full_name|upper }}</b><br>
                 C.C. {{ employee.document_number|default:"N/A" }}
             </td>
             <td>
-                <br><br><br>___________________________________<br><b>FIRMA TALENTO HUMANO</b><br>
+                <br><br><br>___________________________________<br><br>
+                <b>{{ received_by.get_full_name|default:received_by.username|upper }}</b>
             </td>
             <td>
                 <br><br><br>___________________________________<br><br>
-                <b>{{ assigned_by.get_full_name|default:assigned_by.username|upper }}</b>
+                <b>FIRMA Y SELLO</b>
             </td>
         </tr>
     </table>
