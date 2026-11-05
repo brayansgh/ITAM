@@ -1,120 +1,319 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+
     <style>
-        @page { size: letter portrait; margin: 1.5cm; }
-        body { font-family: Arial, sans-serif; font-size: 10px; color: #000; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-        th, td { border: 1px solid #000; padding: 4px; text-align: left; vertical-align: middle; }
-        .text-center { text-align: center; }
-        .bold { font-weight: bold; }
-        .bg-gray { background-color: #f2f2f2; }
-        
-        .header-table th { font-size: 12px; }
-        .header-table img { max-height: 50px; max-width: 120px; }
-        
-        .policies { font-size: 9px; margin-top: 10px; margin-bottom: 15px; }
-        .policies h4 { text-align: center; margin-bottom: 5px; font-size: 11px; }
-        
-        .signature-table td { height: 60px; vertical-align: bottom; text-align: center; padding-bottom: 5px; }
-        .signature-title { font-size: 9px; font-weight: bold; background-color: #f2f2f2; height: 15px !important; vertical-align: middle !important; }
+        @page {
+            size: letter portrait;
+            margin: 1.5cm;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            color: #000;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+
+        th, td {
+            border: 1px solid #000;
+            padding: 4px;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .bold {
+            font-weight: bold;
+        }
+
+        .bg-gray {
+            background-color: #f2f2f2;
+        }
+
+        .header-table th {
+            font-size: 12px;
+        }
+
+        .header-table img {
+            max-height: 50px;
+            max-width: 120px;
+        }
+
+        /* Tabla de activos */
+        .assets-table {
+            table-layout: fixed;
+            font-size: 8px;
+        }
+
+        .assets-table th,
+        .assets-table td {
+            padding: 4px 3px;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+        }
+
+        .policies {
+            font-size: 9px;
+            margin-top: 10px;
+            margin-bottom: 15px;
+        }
+
+        .policies h4 {
+            text-align: center;
+            margin-bottom: 5px;
+            font-size: 11px;
+        }
+
+        .signature-table td {
+            height: 60px;
+            vertical-align: bottom;
+            text-align: center;
+            padding-bottom: 5px;
+        }
+
+        .signature-title {
+            font-size: 9px;
+            font-weight: bold;
+            background-color: #f2f2f2;
+            height: 15px !important;
+            vertical-align: middle !important;
+        }
+
+        .general-observations {
+            vertical-align: top !important;
+            text-align: left !important;
+            padding: 6px !important;
+            font-size: 9px;
+            line-height: 1.4;
+        }
     </style>
 </head>
+
 <body>
 
+    <!-- ENCABEZADO -->
     <table class="header-table">
         <tr>
-            <td class="text-center" width="25%"><img src="{{ logo_acepalma }}" alt="Acepalma"></td>
-            <th class="text-center" width="50%">CONTROL Y ENTREGA DE ACTIVOS TECNOLÓGICOS</th>
             <td class="text-center" width="25%">
-                <img src="{{ logo_solutrans }}" alt="Solutrans"><br>
-                <span style="font-size:8px;">GI-FR-05<br>Versión 001</span>
+                <img src="{{ logo_acepalma }}" alt="Acepalma">
+            </td>
+
+            <th class="text-center" width="50%">
+                CONTROL Y ENTREGA DE ACTIVOS TECNOLÓGICOS
+            </th>
+
+            <td class="text-center" width="25%">
+                <img src="{{ logo_solutrans }}" alt="Solutrans">
+                <br>
+                <span style="font-size:8px;">
+                    GI-FR-05<br>
+                    Versión 001
+                </span>
             </td>
         </tr>
     </table>
 
+    <!-- INFORMACIÓN DEL EMPLEADO -->
     <table>
         <tr class="bg-gray bold text-center">
-            <td width="33%">COMPAÑÍA</td><td width="33%">ÁREA</td><td width="34%">SEDE</td>
+            <td width="33%">COMPAÑÍA</td>
+            <td width="33%">ÁREA</td>
+            <td width="34%">SEDE</td>
         </tr>
+
         <tr class="text-center">
-            <td>{{ company.name|upper }}</td><td>{{ area.name|upper }}</td><td>{{ site.name|upper }}</td>
+            <td>{{ company.name|upper }}</td>
+            <td>{{ area.name|upper }}</td>
+            <td>{{ site.name|upper }}</td>
         </tr>
+
         <tr class="bg-gray bold text-center">
-            <td colspan="2">USUARIO</td><td>CÉDULA</td>
+            <td colspan="2">USUARIO</td>
+            <td>CÉDULA</td>
         </tr>
+
         <tr class="text-center">
-            <td colspan="2">{{ employee.full_name|upper }}</td><td>{{ employee.document_number|default:"N/A" }}</td>
+            <td colspan="2">{{ employee.full_name|upper }}</td>
+            <td>{{ employee.document_number|default:"N/A" }}</td>
         </tr>
     </table>
 
-    <table>
-        <tr class="bg-gray bold text-center">
-            <td width="20%">ELEMENTO</td><td width="20%">ACTIVO FIJO</td>
-            <td width="20%">MARCA</td><td width="20%">MODELO</td><td width="20%">SERIAL</td>
-        </tr>
-        {% for asg in assignments %}
-        <tr class="text-center">
-            <td>{{ asg.asset.category.name|upper }}</td>
-            <td>{{ asg.asset.legacy_asset_tag|default:asg.asset.asset_tag|upper }}</td>
-            <td>{{ asg.asset.model.brand.name|upper|default:"N/A" }}</td>
-            <td>{{ asg.asset.model.name|upper|default:"N/A" }}</td>
-            <td>{{ asg.asset.serial_number|upper|default:"N/A" }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="5" class="text-center">No hay activos registrados.</td></tr>
-        {% endfor %}
-    </table>
+    <!-- ACTIVOS DEVUELTOS -->
+    <table class="assets-table">
 
-    <table>
-        <tr>
-            <td width="20%" class="bg-gray bold text-center">FECHA DE DEVOLUCIÓN</td>
-            <td width="80%">{{ date|upper }}</td>
-        </tr>
-    </table>
+        <thead>
+            <tr class="bg-gray bold text-center">
+                <th width="14%">ELEMENTO</th>
+                <th width="16%">ACTIVO FIJO</th>
+                <th width="12%">MARCA</th>
+                <th width="12%">MODELO</th>
+                <th width="14%">SERIAL</th>
+                <th width="16%">CONDICIÓN DE DEVOLUCIÓN</th>
+                <th width="16%">OBSERVACIONES</th>
+            </tr>
+        </thead>
 
-    <div class="policies">
-        <h4>CHECKLIST DE DESVINCULACIÓN</h4>
-        <table style="width: 100%; border-collapse: collapse;">
-            {% for item in checklist_items %}
+        <tbody>
+            {% for asg in assignments %}
+            <tr class="text-center">
+
+                <!-- Categoría del activo -->
+                <td>
+                    {{ asg.asset.category.name|upper }}
+                </td>
+
+                <!-- Código de activo fijo: campo indispensable -->
+                <td>
+                    {{ asg.asset.legacy_asset_tag|default:asg.asset.asset_tag|upper }}
+                </td>
+
+                <!-- Marca -->
+                <td>
+                    {{ asg.asset.model.brand.name|default:"N/A"|upper }}
+                </td>
+
+                <!-- Modelo -->
+                <td>
+                    {{ asg.asset.model.name|default:"N/A"|upper }}
+                </td>
+
+                <!-- Serial -->
+                <td>
+                    {{ asg.asset.serial_number|default:"N/A"|upper }}
+                </td>
+
+                <!-- Condición física al recibir -->
+                <td>
+                    {{ asg.condition|default:"N/A" }}
+                </td>
+
+                <!-- Observaciones particulares del activo -->
+                <td>
+                    {{ asg.observations|default:"N/A" }}
+                </td>
+
+            </tr>
+
+            {% empty %}
             <tr>
-                <td width="90%" style="border: 1px solid #000; padding: 4px;">{{ item }}</td>
-                <td width="10%" class="text-center" style="border: 1px solid #000; padding: 4px;">[ &nbsp;&nbsp;&nbsp;&nbsp; ]</td>
+                <td colspan="7" class="text-center">
+                    No hay activos registrados en esta devolución.
+                </td>
             </tr>
             {% endfor %}
+        </tbody>
+
+    </table>
+
+    <!-- FECHA DE DEVOLUCIÓN -->
+    <table>
+        <tr>
+            <td width="20%" class="bg-gray bold text-center">
+                FECHA DE DEVOLUCIÓN
+            </td>
+
+            <td width="80%">
+                {{ date|upper }}
+            </td>
+        </tr>
+    </table>
+
+    <!-- CHECKLIST DE DESVINCULACIÓN -->
+    <div class="policies">
+
+        <h4>CHECKLIST DE DESVINCULACIÓN</h4>
+
+        <table style="width: 100%; border-collapse: collapse;">
+
+            {% for item in checklist_items %}
+            <tr>
+                <td width="90%" style="border: 1px solid #000; padding: 4px;">
+                    {{ item }}
+                </td>
+
+                <td width="10%" class="text-center"
+                    style="border: 1px solid #000; padding: 4px;">
+                    [ &nbsp;&nbsp;&nbsp;&nbsp; ]
+                </td>
+            </tr>
+            {% endfor %}
+
         </table>
     </div>
 
+    <!-- FIRMAS Y OBSERVACIONES GENERALES -->
     <table class="signature-table">
+
         <tr>
-            <td class="signature-title" width="33%">FIRMA DE EMPLEADO QUE DEVUELVE</td>
-            <td class="signature-title" width="34%">OBSERVACIONES</td>
-            <td class="signature-title" width="33%">NOMBRE DE EMPLEADO (TEC) QUE RECIBE</td>
+            <td class="signature-title" width="33%">
+                FIRMA DE EMPLEADO QUE DEVUELVE
+            </td>
+
+            <td class="signature-title" width="34%">
+                OBSERVACIONES GENERALES
+            </td>
+
+            <td class="signature-title" width="33%">
+                NOMBRE DE EMPLEADO (TEC) QUE RECIBE
+            </td>
         </tr>
+
         <tr>
             <td>
-                <br><br><br>___________________________________<br><br>
+                <br><br><br>
+                ___________________________________<br><br>
+
                 <b>{{ employee.full_name|upper }}</b><br>
                 C.C. {{ employee.document_number|default:"N/A" }}
             </td>
-            <td rowspan="3" style="vertical-align: top; text-align: left; padding: 5px;"></td>
+
+            <td rowspan="3" class="general-observations">
+                {{ observations|default:"Sin observaciones"|linebreaksbr }}
+            </td>
+
             <td>
-                <br><br><br>___________________________________<br><br>
-                <b>{{ assigned_by.get_full_name|default:assigned_by.username|upper }}</b>
+                <br><br><br>
+                ___________________________________<br><br>
+
+                <b>
+                    {{ assigned_by.get_full_name|default:assigned_by.username|upper }}
+                </b>
             </td>
         </tr>
+
         <tr>
-            <td class="signature-title" style="border: none; background-color: transparent;"></td>
-            <td class="signature-title">EMPLEADO TALENTO HUMANO</td>
+            <td class="signature-title"
+                style="border: none; background-color: transparent;">
+            </td>
+
+            <td class="signature-title">
+                EMPLEADO TALENTO HUMANO
+            </td>
         </tr>
+
         <tr>
             <td style="border: none;"></td>
+
             <td>
-                <br><br><br>___________________________________<br><br>
+                <br><br><br>
+                ___________________________________<br><br>
+
                 <b>FIRMA</b>
             </td>
         </tr>
+
     </table>
+
 </body>
 </html>
