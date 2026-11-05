@@ -190,3 +190,98 @@ class DecommissionedAssetAdmin(OriginalAssetAdmin):
         
         return format_html(html)
     ciclo_de_vida.short_description = ""
+
+# --- FORZAR VISIBILIDAD DE USUARIOS Y AUDITORÍA ISO 27001 ---
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.contrib.auth.admin import UserAdmin, GroupAdmin
+from simple_history import register as history_register
+from simple_history.admin import SimpleHistoryAdmin
+from dataclasses import dataclass
+
+User = get_user_model()
+
+# 1. Registrar rastreo histórico apuntando la tabla a la app 'inventory'
+try:
+    pass  # (Movido a models.py)
+except Exception:
+    pass
+
+@dataclass
+class UserChange:
+    field: str
+    old: str
+    new: str
+
+# 2. Inyectar vista de auditoría traducida
+
+# --- MOTOR DE DIFERENCIAS ABSOLUTO DE USUARIOS ---
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.contrib.auth.admin import UserAdmin, GroupAdmin
+from simple_history.admin import SimpleHistoryAdmin
+
+User = get_user_model()
+HistoricalUser = User.history.model
+
+def get_custom_changes(self):
+    prev = self.prev_record
+    if not prev:
+        return []
+        
+    FIELD_MAP = {
+        'password': 'Contraseña',
+        'is_superuser': 'Permisos Superusuario',
+        'username': 'Nombre de Usuario',
+        'first_name': 'Nombres',
+        'last_name': 'Apellidos',
+        'email': 'Correo Electrónico',
+        'is_staff': 'Acceso Panel Admin',
+        'is_active': 'Estado de Cuenta',
+    }
+    
+    changes = []
+    for field in self._meta.fields:
+        f = field.name
+        # Omitir IDs, metadatos y último inicio de sesión (cambia solo)
+        if f.startswith('history_') or f in ['id', 'last_login']:
+            continue
+            
+        old_val = getattr(prev, f, None)
+        new_val = getattr(self, f, None)
+        
+        if old_val != new_val:
+            label = FIELD_MAP.get(f, f)
+            if f == 'password':
+                changes.append({'field': label, 'old': '*** (Anterior)', 'new': '*** Modificada'})
+            else:
+                changes.append({'field': label, 'old': str(old_val), 'new': str(new_val)})
+    return changes
+
+# 1. Inyectamos la función como propiedad nativa del modelo histórico
+HistoricalUser.add_to_class('custom_changes', property(get_custom_changes))
+
+# 2. Restauramos la vista limpia (sin sobreescribir el proceso nativo)
+class AuditedUserAdmin(SimpleHistoryAdmin, UserAdmin):
+    object_history_template = "admin/custom_object_history.html"
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        # Forzar bloqueo estricto de fechas de sistema
+        force_readonly = ['last_login', 'date_joined']
+        for field in force_readonly:
+            if field not in readonly:
+                readonly.append(field)
+        return tuple(readonly)
+
+try:
+    admin.site.unregister(User)
+except Exception:
+    pass
+try:
+    admin.site.unregister(Group)
+except Exception:
+    pass
+    
+admin.site.register(User, AuditedUserAdmin)
+admin.site.register(Group, GroupAdmin)

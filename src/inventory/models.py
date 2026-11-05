@@ -109,3 +109,14 @@ class DecommissionedAsset(Asset):
         proxy = True
         verbose_name = "Activo en Baja (Histórico)"
         verbose_name_plural = "Activos en Baja (Histórico)"
+
+
+# --- AUDITORÍA DE USUARIOS ISO 27001 ---
+from django.contrib.auth import get_user_model
+from simple_history import register as history_register
+
+try:
+    User = get_user_model()
+    history_register(User, app='inventory')
+except Exception:
+    pass
