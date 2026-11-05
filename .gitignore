@@ -1,4 +1,4 @@
-# Variables de entorno y credenciales (ISO 27001)
+# Variables de entorno y credenciales
 .env
 
 # Caché de Python
@@ -6,9 +6,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Archivos multimedia (PDFs generados) y persistencia de base de datos
-src/media/
-pgdata/
+# Base de datos PostgreSQL
+/postgres/
+/pgdata/
+
+# Archivos multimedia y documentos generados
+/media/
+/src/media/
 
 # Archivos del sistema operativo
 .DS_Store

@@ -1,10 +1,11 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.utils.html import format_html
-from django.contrib import messages
 from django.urls import reverse, path
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, FileResponse
+from django.shortcuts import get_object_or_404, redirect
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
-from .models import Assignment, AssignmentStatus, EmployeeAssetSummary
+from .models import Assignment, AssignmentStatus, EmployeeAssetSummary, OffboardingRecord, OffboardingRecordItem
 from inventory.models import AssetStatus
 from .utils import generate_act_pdf
 
@@ -114,3 +115,112 @@ class EmployeeAssetSummaryAdmin(admin.ModelAdmin):
             except Exception as e:
                 self.message_user(request, f"Error al generar PDF: {e}", level=messages.ERROR)
         return HttpResponseRedirect(reverse('admin:assignments_employeeassetsummary_changelist'))
+
+class OffboardingRecordItemInline(admin.TabularInline):
+    model = OffboardingRecordItem
+    extra = 0
+    can_delete = False
+    fields = (
+        "assignment",
+        "condition",
+        "observations",
+    )
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(OffboardingRecord)
+class OffboardingRecordAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "employee",
+        "created_at",
+        "received_by",
+        "view_pdf",
+    )
+
+    search_fields = (
+        "employee__full_name",
+        "employee__document_number",
+    )
+
+    list_filter = (
+        "created_at",
+        "employee__company",
+	"employee",
+    )
+
+    readonly_fields = (
+        "employee",
+        "received_by",
+        "observations",
+        "pdf",
+        "created_at",
+        "updated_at",
+    )
+
+    fields = (
+        "employee",
+        "received_by",
+        "created_at",
+        "observations",
+        "pdf",
+    )
+
+    inlines = [OffboardingRecordItemInline]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description="Acta PDF")
+    def view_pdf(self, obj):
+        if not obj.pdf:
+            return "PDF no disponible"
+
+        url = reverse(
+            "admin:assignments_offboardingrecord_view_pdf",
+            args=[obj.pk],
+        )
+
+        return format_html(
+            '<a class="button" href="{}" target="_blank">Ver / Descargar PDF</a>',
+            url,
+        )
+
+    def get_urls(self):
+        urls = super().get_urls()
+
+        custom_urls = [
+            path(
+                "<uuid:object_id>/view-pdf/",
+                self.admin_site.admin_view(self.view_pdf_view),
+                name="assignments_offboardingrecord_view_pdf",
+            ),
+        ]
+
+        return custom_urls + urls
+
+    def view_pdf_view(self, request, object_id):
+        record = get_object_or_404(
+            OffboardingRecord,
+            pk=object_id,
+        )
+
+        if not self.has_view_permission(request, record):
+            raise PermissionDenied
+
+        if not record.pdf:
+            messages.error(request, "Esta acta no tiene un PDF asociado.")
+            return redirect("admin:assignments_offboardingrecord_changelist")
+
+        return FileResponse(
+            record.pdf.open("rb"),
+            content_type="application/pdf",
+            filename=record.pdf.name.split("/")[-1],
+            as_attachment=False,
+        )

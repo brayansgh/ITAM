@@ -5,8 +5,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
+from django.db.models import Q
+from simple_history.admin import SimpleHistoryAdmin
 
-from .models import Employee
+from .models import Employee, EmployeeStatus, RetiredEmployee
 from assignments.models import (
     Assignment,
     AssignmentStatus,
@@ -18,7 +20,7 @@ from inventory.models import AssetStatus
 
 
 @admin.register(Employee)
-class EmployeeAdmin(admin.ModelAdmin):
+class EmployeeAdmin(SimpleHistoryAdmin):
 
     search_fields = ("full_name", "document_number")
 
@@ -33,6 +35,21 @@ class EmployeeAdmin(admin.ModelAdmin):
         "process_offboarding",
     )
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Permitir consultar el historial de cualquier empleado,
+        # incluso si está retirado y no tiene activos pendientes.
+        if request.resolver_match.url_name in (
+            "employees_employee_history",
+            "employees_employee_simple_history",
+        ):
+            return qs
+        # Filtro normal de la lista de empleados.
+        return qs.filter(
+            ~Q(status=EmployeeStatus.RETIRO)
+            | Q(assignments__status=AssignmentStatus.ACTIVE)
+        ).distinct()
+
     def view_assigned_assets(self, obj):
         url = (
             f"/admin/assignments/assignment/"
@@ -46,11 +63,19 @@ class EmployeeAdmin(admin.ModelAdmin):
 
     view_assigned_assets.short_description = "Activos Asignados"
 
+    @admin.display(description="Devolución de activos")
     def process_offboarding(self, obj):
-        status = str(getattr(obj, "status", "")).upper()
-
-        if status != "RETIRO":
+        if obj.status != EmployeeStatus.RETIRO:
             return "—"
+
+        has_pending_assets = obj.assignments.filter(
+            status=AssignmentStatus.ACTIVE
+        ).exists()
+
+        if not has_pending_assets:
+            return format_html(
+                '<span style="color:green;font-weight:bold;">Completada</span>'
+            )
 
         url = reverse(
             "admin:employees_employee_process_offboarding",
@@ -61,8 +86,6 @@ class EmployeeAdmin(admin.ModelAdmin):
             '<a class="button" href="{}">Procesar devolución</a>',
             url,
         )
-
-    process_offboarding.short_description = "Devolución de activos"
 
     def get_urls(self):
         urls = super().get_urls()
@@ -229,4 +252,70 @@ class EmployeeAdmin(admin.ModelAdmin):
             request,
             "admin/employees/employee/process_offboarding.html",
             context,
+        )
+
+
+@admin.register(RetiredEmployee)
+class RetiredEmployeeAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "full_name",
+        "document_number",
+        "company",
+        "site",
+        "area",
+        "view_offboarding_records",
+    )
+
+    search_fields = (
+        "full_name",
+        "document_number",
+    )
+
+    list_filter = (
+        "company",
+        "site",
+        "area",
+    )
+
+    readonly_fields = tuple(
+        field.name for field in Employee._meta.fields
+    )
+
+    def history_view(self, request, object_id, extra_context=None):
+        url = reverse(
+            "admin:employees_employee_history",
+            args=[object_id],
+        )
+        return redirect(url)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        return (
+            qs.filter(status=EmployeeStatus.RETIRO)
+            .exclude(
+                assignments__status=AssignmentStatus.ACTIVE
+            )
+            .distinct()
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description="Historial de devoluciones")
+    def view_offboarding_records(self, obj):
+        url = (
+            reverse(
+                "admin:assignments_offboardingrecord_changelist"
+            )
+            + f"?employee__id__exact={obj.pk}"
+        )
+
+        return format_html(
+            '<a class="button" href="{}">Ver actas</a>',
+            url,
         )

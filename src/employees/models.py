@@ -1,6 +1,7 @@
 from django.db import models
 from core.models import BaseModel
 from organizations.models import Company, Site, Area
+from simple_history.models import HistoricalRecords
 
 class DocumentType(models.TextChoices):
     CC = 'CC', 'Cédula de Ciudadanía'
@@ -14,6 +15,7 @@ class EmployeeStatus(models.TextChoices):
     RETIRO = 'RETIRO', 'Retiro de la compañía'
 
 class Employee(BaseModel):
+    history = HistoricalRecords()
     company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='employees')
     site = models.ForeignKey(Site, on_delete=models.PROTECT, related_name='employees', null=True, blank=True)
     area = models.ForeignKey(Area, on_delete=models.PROTECT, related_name='employees', null=True, blank=True)
@@ -42,3 +44,10 @@ class Employee(BaseModel):
 
     def __str__(self):
         return f"{self.full_name} ({self.company.code})"
+
+class RetiredEmployee(Employee):
+
+    class Meta:
+        proxy = True
+        verbose_name = "Empleado retirado"
+        verbose_name_plural = "Empleados retirados"
