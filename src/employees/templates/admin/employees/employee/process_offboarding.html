@@ -1,0 +1,83 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+
+<h1>{{ title }}</h1>
+
+<p>
+    Selecciona únicamente los activos que estás recibiendo físicamente.
+    Los que no selecciones permanecerán asignados al empleado.
+</p>
+
+<form method="post">
+    {% csrf_token %}
+
+    <fieldset class="module aligned">
+        <h2>Activos asignados</h2>
+
+        {{ formset.management_form }}
+
+        {% for row in rows %}
+            <div style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px;">
+
+                <h3>
+                    {{ row.assignment.asset.asset_tag }}
+                    - {{ row.assignment.asset.category.name }}
+                </h3>
+
+                <p>
+                    <strong>Marca:</strong>
+                    {{ row.assignment.asset.model.brand.name|default:"N/A" }}
+                </p>
+
+                <p>
+                    <strong>Modelo:</strong>
+                    {{ row.assignment.asset.model.name|default:"N/A" }}
+                </p>
+
+                <p>
+                    <strong>Serial:</strong>
+                    {{ row.assignment.asset.serial_number|default:"N/A" }}
+                </p>
+
+                {{ row.form.assignment_id }}
+
+                <p>{{ row.form.selected }} {{ row.form.selected.label }}</p>
+
+                <p>
+                    {{ row.form.condition.label }}
+                    {{ row.form.condition }}
+                    {{ row.form.condition.errors }}
+                </p>
+
+                <p>
+                    {{ row.form.observations.label }}
+                    {{ row.form.observations }}
+                    {{ row.form.observations.errors }}
+                </p>
+
+            </div>
+        {% empty %}
+            <p>Este empleado no tiene activos pendientes de devolución.</p>
+        {% endfor %}
+    </fieldset>
+
+    <fieldset class="module aligned">
+        <h2>Observaciones generales del acta</h2>
+        {{ form.observations }}
+        {{ form.observations.errors }}
+    </fieldset>
+
+    <div style="margin-top: 20px;">
+        <button type="submit" class="default">
+            Registrar devolución
+        </button>
+
+        <a href="{% url 'admin:employees_employee_changelist' %}"
+           class="button">
+            Cancelar
+        </a>
+    </div>
+</form>
+
+{% endblock %}

@@ -1,12 +1,17 @@
 from django.db import models
 from core.models import BaseModel
-from organizations.models import Company, Site, Area, Status
+from organizations.models import Company, Site, Area
 
 class DocumentType(models.TextChoices):
     CC = 'CC', 'Cédula de Ciudadanía'
     CE = 'CE', 'Cédula de Extranjería'
     PASSPORT = 'PASSPORT', 'Pasaporte'
     NIT = 'NIT', 'NIT'
+
+class EmployeeStatus(models.TextChoices):
+    ACTIVE = 'ACTIVE', 'Activo'
+    INACTIVE = 'INACTIVE', 'Inactivo'
+    RETIRO = 'RETIRO', 'Retiro de la compañía'
 
 class Employee(BaseModel):
     company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='employees')
@@ -20,7 +25,11 @@ class Employee(BaseModel):
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=50, blank=True, null=True)
     
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
+    status = models.CharField(
+    max_length=10,
+    choices=EmployeeStatus.choices,
+    default=EmployeeStatus.ACTIVE
+)
 
     class Meta:
         constraints = [

@@ -35,3 +35,73 @@ class EmployeeAssetSummary(Employee):
         proxy = True
         verbose_name = "Resumen por Usuario"
         verbose_name_plural = "2. Resumen por Usuarios"
+
+# NUEVO: Cambios en el PDF de devolución de activos
+class OffboardingRecord(BaseModel):
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.PROTECT,
+        related_name="offboarding_records",
+        verbose_name="Empleado"
+    )
+
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="received_offboarding_records",
+        verbose_name="Recibido por"
+    )
+
+    observations = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Observaciones generales"
+    )
+
+    pdf = models.FileField(
+        upload_to="actas_desvinculacion/%Y/%m/",
+        blank=True,
+        null=True,
+        verbose_name="Acta de devolución"
+    )
+
+    class Meta:
+        verbose_name = "Acta de devolución"
+        verbose_name_plural = "Actas de devolución"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Acta de {self.employee.full_name} - {self.created_at:%d/%m/%Y}"
+
+
+class OffboardingRecordItem(BaseModel):
+    offboarding_record = models.ForeignKey(
+        OffboardingRecord,
+        on_delete=models.CASCADE,
+        related_name="items",
+        verbose_name="Acta"
+    )
+
+    assignment = models.OneToOneField(
+        "Assignment",
+        on_delete=models.PROTECT,
+        related_name="offboarding_item",
+        verbose_name="Asignación devuelta"
+    )
+
+    condition = models.TextField(
+        verbose_name="Condición del activo"
+    )
+
+    observations = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Observaciones del activo"
+    )
+
+    class Meta:
+        verbose_name = "Activo recibido en devolución"
+        verbose_name_plural = "Activos recibidos en devolución"
+
+    def __str__(self):
+        return f"{self.assignment.asset.asset_tag} - {self.offboarding_record.employee.full_name}"
