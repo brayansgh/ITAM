@@ -4,7 +4,7 @@ Diseño validado y aplicado el 6 de noviembre de 2026.
 
 ## Identidad y navegación
 
-- Cabecera gris corporativo `#58595B`, palma blanca junto a ACEPALMA ITAM y gota en su color original.
+- Cabecera azul principal `#003366` (`#036`) en el Admin y el login; palma original presentada en blanco junto a ACEPALMA ITAM.
 - Acentos naranja `#F37035`, azul `#78A3B9` y azul claro `#ACE1FA`, según los RGB explícitos del documento de identidad compartido.
 - Sin selector global de compañía, campana de notificaciones ni marcas de agua.
 - Menú plegable y accesos según los permisos de los ModelAdmin existentes.
@@ -54,3 +54,26 @@ El usuario autorizó diferenciar las placas repetidas. Se conservaron seis placa
 ## Verificación
 
 La ejecución y los límites están registrados en `docs/estado-proyecto.md`. Los respaldos son privados y están excluidos de Git. No se cambiaron Nginx, Docker Compose, DEBUG ni el servidor de aplicación; el endurecimiento de infraestructura sigue siendo una tarea separada.
+
+## Pulido del dashboard — 6 de noviembre de 2026
+
+- Tipografía aumentada 2 px, con base de 16 px; controles y etiquetas de filtros alineados.
+- Etiqueta accesible del buscador oculta visualmente sin retirarla de lectores de pantalla; cabecera móvil con altura suficiente para buscador y cuenta.
+- Bienvenida «Bienvenido al sistema de gestión de activos» e iconos emoji en menú, indicadores y secciones. Su apariencia depende de la fuente de emojis del navegador.
+- Cabecera con el original `palma.png` presentado en blanco mediante CSS, evitando el ruido de la variante anterior; nombre ACEPALMA y subtítulo ITAM alineados. Los originales se conservan.
+
+## Colores de cabecera y acciones — 6 de noviembre de 2026
+
+- Por solicitud del usuario, cabecera azul `#78A3B9` y botones de acción naranja `#F37035` con texto blanco, incluido Actualizar y acceso al sistema.
+- Buscador de cabecera integrado: borde y fondo blancos comunes, campo sin borde interior y botón naranja de la misma altura que el campo.
+
+## Paleta principal y barra de formularios — 6 de noviembre de 2026
+
+- La preferencia actual sustituye el azul de cabecera anterior por #036 (#003366). Acentos y rellenos de botones #F37035, texto blanco; eliminación en rojo.
+- Barra compartida de formularios: solo Guardar, Cancelar y Eliminar según permisos y estado del registro. En solo consulta se conserva Volver al listado. Sin Guardar como nuevo, Guardar y añadir otro ni Guardar y continuar editando.
+- Altura adaptable y mínimo 44 px en los tres controles; se elimina el recorte causado por alturas fijas heredadas con border-box. Los permisos y bloqueos de negocio siguen vigentes.
+
+## Menú y listados sin acciones masivas — 6 de noviembre de 2026
+
+- El control de navegación vive junto al nombre en la cabecera, con posición en flujo y separación adaptable; no depende de coordenadas absolutas. No se muestra en login ni ventanas emergentes sin navegación.
+- Los listados no ofrecen selector Acción / Ir ni casillas de selección masiva. StandardHistoryAdmin no expone acciones masivas, incluidos administradores con acciones propias; el proxy de empleados retirados también las desactiva. Se conservan las acciones individuales autorizadas, la edición de estado por fila en importaciones y las funciones de servicio existentes.

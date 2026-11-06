@@ -21,6 +21,10 @@ class StandardHistoryAdmin(SimpleHistoryAdmin):
     audit_related_models = ()
     audit_page_size = 50
 
+    def get_actions(self, request):
+        """La gestión se realiza por registro, sin acciones masivas en listados."""
+        return {}
+
     def changelist_view(self, request, extra_context=None):
         return super().changelist_view(request, {'title': str(self.opts.verbose_name_plural).capitalize(), **(extra_context or {})})
 
