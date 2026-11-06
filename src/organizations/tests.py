@@ -20,7 +20,7 @@ class OrganizationIntegrityTests(TestCase):
         self.category = Category.objects.create(name="Categoría")
         self.user = User.objects.create_user(username="integrity_operator")
         self.employee = Employee.objects.create(company=self.company, site=self.site, area=self.area, full_name="Persona sintética")
-        self.asset = Asset.objects.create(company=self.company, site=self.site, category=self.category, asset_tag="ORG-001")
+        self.asset = Asset.objects.create(company=self.company, owner_company=self.other, site=self.site, category=self.category, asset_tag="ORG-001")
 
     def assign(self):
         return create_assignment(asset_id=self.asset.pk, employee_id=self.employee.pk,
@@ -99,8 +99,7 @@ class OrganizationIntegrityTests(TestCase):
             self.assertEqual(obj.company, self.company)
 
     def test_owner_company_and_borrower_can_differ_from_asset_manager(self):
-        self.asset.owner_company = self.other
-        self.asset.save()
+        self.assertEqual(self.asset.owner_company, self.other)
         borrower = Employee.objects.create(company=self.other, full_name="Persona de otra compañía")
         assignment = create_assignment(asset_id=self.asset.pk, employee_id=borrower.pk,
                                        assigned_by=self.user, initial_condition="Buen estado")
@@ -162,7 +161,6 @@ class OrganizationIntegrityTests(TestCase):
         from django.urls import reverse
         from maintenance.models import MaintenanceRecord
         self.asset.site = self.foreign_site
-        self.asset.owner_company = self.other
         self.asset.save()
         operator = User.objects.create_superuser(username="shared_site_operator", password="Test-4826!")
         self.client.force_login(operator)

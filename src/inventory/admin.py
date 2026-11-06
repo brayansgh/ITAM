@@ -3,10 +3,13 @@ from django.contrib import admin
 from django.db.models import OuterRef, Subquery
 from django.urls import reverse
 from .models import Category, Brand, ModelAsset, Asset, AssetSpecs, AssetNetwork, AssetWarranty
+from .forms import AssetRegistrationForm
+from django.forms import modelform_factory
 
 @admin.register(Category)
 class CategoryAdmin(StandardHistoryAdmin):
-    list_display = ('name', 'created_at')
+    list_display = ('name', 'group', 'created_at')
+    list_filter = ('group',)
     search_fields = ('name',)
 
 @admin.register(Brand)
@@ -33,24 +36,46 @@ class FrozenAssetInlineMixin:
 
 class AssetSpecsInline(FrozenAssetInlineMixin, admin.StackedInline):
     model = AssetSpecs
+    verbose_name_plural = 'Información técnica'
+    form = modelform_factory(AssetSpecs, fields='__all__', labels={'ram': 'Memoria RAM', 'storage': 'Almacenamiento', 'processor': 'Procesador', 'operating_system': 'Sistema operativo'})
     can_delete = False
 
 class AssetNetworkInline(FrozenAssetInlineMixin, admin.StackedInline):
     model = AssetNetwork
+    verbose_name_plural = 'Red y telefonía'
+    form = modelform_factory(AssetNetwork, fields='__all__', labels={'hostname': 'Hostname', 'mac_address': 'Dirección MAC', 'imei': 'IMEI', 'phone_number': 'Número de teléfono', 'operator': 'Operador'})
     can_delete = False
 
 class AssetWarrantyInline(FrozenAssetInlineMixin, admin.StackedInline):
     model = AssetWarranty
+    verbose_name_plural = 'Garantías y compra'
+    form = modelform_factory(AssetWarranty, fields='__all__', labels={'supplier': 'Proveedor', 'warranty_start': 'Inicio de garantía', 'warranty_end': 'Fin de garantía'})
     extra = 0
 
 @admin.register(Asset)
 class AssetAdmin(StandardHistoryAdmin):
+    form = AssetRegistrationForm
+    list_per_page = 25
+    fieldsets = (
+        ('Clasificación', {'fields': ('group', 'category')}),
+        ('Identificación y propiedad', {'fields': ('legacy_asset_tag', 'asset_tag', 'owner_company', 'model', 'serial_number', 'property_type')}),
+        ('Administración y ubicación', {'fields': ('company', 'site')}),
+        ('Información adicional', {'fields': ('status', 'purchase_date', 'warranty_end_date', 'observations')}),
+    )
     list_display = ('asset_tag', 'category', 'brand_model', 'serial_number', 'company', 'status')
-    list_filter = ('status', 'property_type', 'company', 'site', 'category')
+    list_filter = ('company', 'site', 'category__group', 'category', 'status', 'property_type')
     search_fields = ('asset_tag', 'legacy_asset_tag', 'serial_number', 'network__hostname', 'current_employee_name')
     change_form_template = 'admin/inventory/asset/change_form.html'
     inlines = [AssetSpecsInline, AssetNetworkInline, AssetWarrantyInline]
     audit_related_models = ((AssetSpecs, "asset"), (AssetNetwork, "asset"), (AssetWarranty, "asset"))
+
+    def get_search_fields(self, request):
+        fields = super().get_search_fields(request)
+        if getattr(request, 'user', None):
+            from assignments.models import Assignment
+            if not self.admin_site._registry[Assignment].has_view_permission(request):
+                return tuple(field for field in fields if field != 'current_employee_name')
+        return fields
     
     def get_queryset(self, request):
         from assignments.models import Assignment, AssignmentStatus
@@ -58,6 +83,28 @@ class AssetAdmin(StandardHistoryAdmin):
         return super().get_queryset(request).select_related(
             "category", "model__brand", "company", "owner_company", "site",
         ).annotate(current_employee_name=Subquery(active.values("employee__full_name")[:1]))
+
+    def get_urls(self):
+        from django.urls import path
+        return [path('tipos/', self.admin_site.admin_view(self.category_options), name='inventory_category_options')] + super().get_urls()
+
+    def category_options(self, request):
+        from django.core.exceptions import PermissionDenied
+        from django.http import JsonResponse
+        if not (self.has_view_permission(request) or self.has_add_permission(request)):
+            raise PermissionDenied
+        return JsonResponse({'results': list(Category.objects.filter(group=request.GET.get('group', '')).exclude(group='').order_by('name').values('id', 'name'))})
+
+    def get_readonly_fields(self, request, obj=None):
+        return ('asset_tag', 'owner_company') if obj else ('asset_tag',)
+
+    @admin.display(description='Activo', ordering='legacy_asset_tag')
+    def asset_identity(self, obj):
+        return format_html('<strong>{}</strong><br><span class="itam-secondary">{}</span>', obj.display_identifier, obj.asset_tag if obj.legacy_asset_tag else 'Sin placa de activo fijo')
+
+    @admin.display(description='Clasificación', ordering='category__group')
+    def classification(self, obj):
+        return format_html('<span class="itam-label">{}</span><br><span class="itam-secondary">{}</span>', obj.category.get_group_display() or 'Sin grupo (legado)', obj.category.name)
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
@@ -77,6 +124,26 @@ class AssetAdmin(StandardHistoryAdmin):
                 f"admin:inventory_{self.model._meta.model_name}_history", args=[obj.pk],
             )
             context["asset_record"] = obj
+            context['asset_detail'] = request.method == 'GET' and request.GET.get('editar') != '1'
+            context['asset_edit_url'] = request.path + '?editar=1'
+            context['can_asset_specs'] = AssetSpecsInline(self.model, self.admin_site).has_view_permission(request, obj)
+            context['can_asset_network'] = AssetNetworkInline(self.model, self.admin_site).has_view_permission(request, obj)
+            from maintenance.models import MaintenanceRecord, MaintenanceDocument
+            from assignments.models import Assignment
+            ma = self.admin_site._registry[MaintenanceRecord]
+            aa = self.admin_site._registry[Assignment]
+            documents = []
+            if aa.has_view_permission(request):
+                for assignment in aa.get_queryset(request).filter(asset=obj).exclude(signed_act_pdf='').exclude(signed_act_pdf__isnull=True):
+                    if aa.has_view_permission(request, assignment):
+                        documents.append({'label': 'Acta de asignación', 'url': reverse('download_act_pdf', args=[assignment.pk])})
+            if ma.has_view_permission(request):
+                tickets = ma.get_queryset(request).filter(asset=obj)
+                for document in MaintenanceDocument.objects.filter(maintenance__in=tickets).select_related('maintenance'):
+                    if ma.has_view_permission(request, document.maintenance):
+                        documents.append({'label': 'Evidencia de ticket', 'url': reverse('admin:maintenance_document_download', args=[document.pk])})
+            context['asset_documents'] = documents
+            context['asset_tickets'] = ma.get_queryset(request).filter(asset=obj).select_related('reported_by')[:20] if ma.has_view_permission(request) else []
         return super().render_change_form(request, context, add, change, form_url, obj)
 
     def has_change_permission(self, request, obj=None):
@@ -95,7 +162,7 @@ class AssetAdmin(StandardHistoryAdmin):
         return "-"
     brand_model.short_description = "Marca y Modelo"
     class Media:
-        js = ('js/hide_change_reason.js',)
+        js = ('js/hide_change_reason.js', 'itam/asset-form.js')
 
 # --- SEPARACIÓN DEL CEMENTERIO DE ACTIVOS ---
 from django.utils.html import format_html
@@ -108,12 +175,22 @@ if Asset in admin.site._registry:
     
     class ActiveAssetAdmin(OriginalAssetAdmin):
         list_display = (
-            'legacy_asset_tag', 'assigned_employee', 'brand_model',
-            'serial_number', 'company', 'status',
+            'asset_identity', 'classification', 'brand_model', 'company', 'site', 'assigned_employee', 'status',
         )
 
         def get_queryset(self, request):
             return super().get_queryset(request).exclude(status__icontains="DECOMMISSION")
+
+        def get_list_display(self, request):
+            columns = super().get_list_display(request)
+            if getattr(request, 'user', None):
+                from assignments.models import Assignment
+                if not self.admin_site._registry[Assignment].has_view_permission(request):
+                    @admin.display(description='Custodio')
+                    def restricted_custodian(obj):
+                        return 'Sin permiso para consultar custodia'
+                    return tuple(restricted_custodian if column == 'assigned_employee' else column for column in columns)
+            return columns
 
         @admin.display(description="Asignado a", ordering="current_employee_name")
         def assigned_employee(self, obj):
@@ -124,6 +201,7 @@ if Asset in admin.site._registry:
 @admin.register(DecommissionedAsset)
 class DecommissionedAssetAdmin(OriginalAssetAdmin):
     change_form_template = "admin/inventory/decommissionedasset/change_form.html"
+    list_display = ('asset_identity', 'classification', 'brand_model', 'company', 'site', 'status')
     
     def get_queryset(self, request):
         return super().get_queryset(request).filter(status__icontains="DECOMMISSION")

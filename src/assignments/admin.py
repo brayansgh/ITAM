@@ -101,6 +101,7 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
     )
 
     search_fields = (
+        "asset__legacy_asset_tag",
         "asset__asset_tag",
         "asset__serial_number",
         "employee__full_name",
@@ -253,6 +254,11 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
 # NUEVA VISTA: Panel consolidado por Usuario
 @admin.register(EmployeeAssetSummary)
 class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
+    def get_list_display(self, request):
+        columns = super().get_list_display(request)
+        if not (request.user.is_superuser or request.user.role in (Role.ADMINISTRATOR, Role.TECHNOLOGY)):
+            return tuple(column for column in columns if column != 'generate_pdf_button')
+        return columns
 
     list_display = (
         "document_number",

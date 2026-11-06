@@ -75,12 +75,25 @@ class MaintenanceDocumentInline(admin.TabularInline):
 
 @admin.register(MaintenanceRecord)
 class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
+    list_per_page = 25
+    change_form_template = 'admin/maintenance/ticket_form.html'
     list_display = ('ticket_reference', 'asset', 'type', 'status', 'reported_by')
     list_display_links = ('ticket_reference',)
     list_filter = ('type', 'status')
-    search_fields = ('asset__asset_tag', 'description', 'provider')
+    search_fields = ('asset__legacy_asset_tag', 'asset__asset_tag', 'description', 'provider')
+    fieldsets = (
+        ('Información del ticket', {'fields': ('asset', 'type', 'description', 'reported_by', 'provider', 'cost')}),
+        ('Resolución y estado', {'fields': ('resolution_notes', 'status'), 'description': 'Guarda las evidencias antes de cerrar. Los tickets cerrados quedan de solo consulta.'}),
+    )
     inlines = [MaintenanceDocumentInline]
     audit_related_models = ((MaintenanceDocument, "maintenance"),)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        match = getattr(request, 'resolver_match', None)
+        if match and match.url_name == 'maintenance_maintenancerecord_changelist':
+            qs = qs.exclude(type=MaintenanceType.DECOMMISSION)
+        return qs
 
     @admin.display(description="Ticket", ordering="created_at")
     def ticket_reference(self, obj):
@@ -104,6 +117,12 @@ class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         form = super().get_form(request, obj, **kwargs)
         if "status" in form.base_fields:
             form.base_fields["status"].help_text = "Guarda las evidencias antes de cerrar. Los tickets completados o cancelados serán de solo consulta."
+        if 'type' in form.base_fields and not obj and self.model is MaintenanceRecord:
+            if request.GET.get('type') == MaintenanceType.DECOMMISSION:
+                form.base_fields['type'].initial = MaintenanceType.DECOMMISSION
+                form.base_fields['type'].disabled = True
+            else:
+                form.base_fields['type'].choices = [(key, label) for key, label in MaintenanceType.choices if key != MaintenanceType.DECOMMISSION]
         return form
 
     def has_change_permission(self, request, obj=None):

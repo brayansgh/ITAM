@@ -277,3 +277,27 @@ Implementación aprobada tras la validación de buenas prácticas:
 ## Exclusión de instrucciones locales
 
 Por solicitud del usuario, AGENTS.md se conserva localmente y se retira del seguimiento del repositorio. .gitignore excluye ese archivo y los respaldos privados. No se reescribe el historial de Git ni se publica el contenido local actualizado de AGENTS.md.
+
+
+## Interfaz corporativa y registro de activos — 06/11/2026 16:21:26 -05
+
+- El usuario validó dashboard, listados, fichas sin fotografía, formularios, separación de Mantenimiento/Bajas, Documentos y actas y búsqueda de activos/empleados. Autorizó aplicar los cambios y diferenciar placas duplicadas. Diseño consolidado en [diseno-administracion.md](diseno-administracion.md).
+- Interfaz propia sobre Django Admin, con cabecera oscura corporativa, palma de contraste, menú plegable y filtros horizontales. No se añadieron frameworks ni dependencias a requirements. El logo original se conserva.
+- Se reutiliza Category como tipo, con grupo. Catálogo de 19 tipos, incluido Radioteléfono. Selector dependiente y validación de grupo/tipo en servidor. Categorías antiguas sin reclasificar.
+- Placa de activo fijo opcional y única cuando existe; principal visible con fallback al código interno. Generación ACE-0001 / SOL-0001 por propietaria, cuatro dígitos, bloqueo transaccional y prueba de cuatro registros simultáneos. Código y propietaria inmutables; administradora y custodio pueden ser de otra compañía. Códigos legados explícitos conservados.
+- Copia aislada en /tmp/itam-interface-20261106/src, ejecutada dentro del contenedor en /tmp/itam-interface-src. Configuraciones temporales de prueba y vista previa excluidas del despliegue.
+- Suite completa final: **163 pruebas, OK**, 65,681 segundos. PostgreSQL temporal test_itam_interface_20261106, distinto de la base de aplicación, sin TEST.MIRROR y destruido al finalizar. Incluye permisos, integridad, concurrencia, cierre de tickets, documentos, auditoría y nueva prueba de transición del esquema para placas duplicadas.
+- Chromium: dashboard, inventario, ficha y formulario a 1440, 1024, 390 y 320 px; sin desbordamiento horizontal de página ni errores JavaScript. Verificados pestaña técnica, carga de tipos de Telefonía/Radioteléfono y acceso a iniciar baja con tipo fijo. Solo datos sintéticos. Se corrigió el desbordamiento móvil antes de desplegar. Herramientas de navegador, bibliotecas y fuentes quedaron aisladas en /tmp; no se instalaron paquetes del sistema.
+- Respaldo privado de código y PostgreSQL custom, validado con pg_restore --list. Servicio web pausado brevemente mientras se aplicaron los cambios; configuración de Nginx y Docker Compose conservada.
+- Aplicadas inventory.0008_clasificacion_identificacion y inventory.0009_etiquetas_en_espanol. Se diferenciaron **6 placas** con sufijos -DUP-0001 y **6 versiones nuevas de auditoría** con motivo explícito, sin atribuirlas a un usuario de Django sin evidencia. La placa del activo dado de baja se conservó. No se editaron cierres ni auditoría anterior.
+- Comparación mediante hashes antes/después: los 352 activos conservan códigos, propietarias, administradoras, estados, categorías, modelos y ubicaciones; empleados, asignaciones, devoluciones, tickets, anexos y organizaciones conservan sus datos. La auditoría preexistente permanece idéntica. No se borraron registros de prueba. Los 341 activos sin propietaria registrada siguen sin ella.
+- Comprobaciones del código desplegado: check sin problemas; migrate --check sin pendientes; makemigrations --check --dry-run sin cambios. audit_status --json --fail-on-missing sin modelos faltantes; no implica reconstrucción de historiales antiguos ni captura de SQL externo.
+- Ocho pantallas desplegadas renderizadas en solo lectura, sin crear sesiones ni operaciones nuevas. HTTP real: login y nuevos estáticos 200. Configuración efectiva de Nginx revisada; /media, /media/ y archivo sintético bloqueados con 404; Django tampoco entrega el archivo. Archivo sintético retirado.
+- process_approved requiere propietaria explícita por lote mediante --owner-code ACE/SOL y un tipo clasificado. No se ejecutó importación, limpieza de organizaciones, renumeración de códigos existentes ni reasignación de propietarias.
+- Sin commit ni push. AGENTS.md permanece local e ignorado. El endurecimiento de producción (runserver/DEBUG) no forma parte del despliegue.
+
+- Base temporal de revisión visual test_itam_interface_preview_20261106 eliminada al finalizar. La base de aplicación se conservó.
+
+## Versionado de la interfaz corporativa
+
+El usuario solicitó expresamente hacer commit y push de la implementación anterior. Se incluyen código, migraciones, pruebas, recursos gráficos y documentación; AGENTS.md, respaldos privados y configuraciones temporales quedan excluidos. Las 163 pruebas y comprobaciones de despliegue corresponden a la ejecución documentada arriba; no se repitieron por esta operación de versionado.
