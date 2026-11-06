@@ -1,5 +1,6 @@
 from inventory.models import Asset, AssetStatus
 from employees.models import Employee
+from employees.validation import validate_assignment_recipient
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -10,7 +11,7 @@ from .models import Assignment, AssignmentStatus
 
 
 @transaction.atomic
-def return_assignment(*, assignment_id, condition):
+def return_assignment(*, assignment_id, condition, returned_by=None):
     """
     Registra la devolución de un activo asignado.
 
@@ -20,12 +21,9 @@ def return_assignment(*, assignment_id, condition):
 
     # 1. Consultar y bloquear la asignación y su activo.
     try:
-        assignment = (
-            Assignment.objects
-            .select_for_update()
-            .select_related("asset")
-            .get(pk=assignment_id)
-        )
+        asset_id = Assignment.objects.values_list("asset_id", flat=True).get(pk=assignment_id)
+        locked_asset = Asset.objects.select_for_update().get(pk=asset_id)
+        assignment = Assignment.objects.select_for_update().get(pk=assignment_id, asset_id=asset_id)
     except Assignment.DoesNotExist:
         raise ValidationError(
             "La asignación que intentas devolver no existe."
@@ -50,6 +48,8 @@ def return_assignment(*, assignment_id, condition):
     assignment.returned_at = timezone.now()
     assignment.return_condition = condition
 
+    if returned_by is not None:
+        assignment._history_user = returned_by
     assignment.save(
         update_fields=[
             "status",
@@ -60,8 +60,11 @@ def return_assignment(*, assignment_id, condition):
     )
 
     # 5. Actualizar el estado del activo.
-    asset = assignment.asset
-    asset.status = AssetStatus.AVAILABLE
+    asset = locked_asset
+    if returned_by is not None:
+        asset._history_user = returned_by
+    from maintenance.services import resolved_status
+    asset.status = resolved_status(asset, asset._state.db)
 
     asset.save(
         update_fields=[
@@ -103,14 +106,16 @@ def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition):
 
     # 4. Comprobar que exista el empleado.
     try:
-        employee = Employee.objects.get(pk=employee_id)
+        employee = Employee.objects.select_for_update().get(pk=employee_id)
     except Employee.DoesNotExist:
         raise ValidationError(
             "El empleado al que intentas asignar el activo no existe."
         )
 
+    validate_assignment_recipient(employee)
+
     # 5. Crear la asignación.
-    assignment = Assignment.objects.create(
+    assignment = Assignment(
         asset=asset,
         employee=employee,
         assigned_by=assigned_by,
@@ -118,8 +123,12 @@ def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition):
         status=AssignmentStatus.ACTIVE,
     )
 
+    assignment._history_user = assigned_by
+    assignment.save()
+
     # 6. Actualizar el estado del activo.
     asset.status = AssetStatus.ASSIGNED
+    asset._history_user = assigned_by
     asset.save(update_fields=["status", "updated_at"])
 
     return assignment

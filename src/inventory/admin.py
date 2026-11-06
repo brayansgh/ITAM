@@ -1,18 +1,21 @@
+from core.admin_audit import StandardHistoryAdmin
 from django.contrib import admin
+from django.db.models import OuterRef, Subquery
+from django.urls import reverse
 from .models import Category, Brand, ModelAsset, Asset, AssetSpecs, AssetNetwork, AssetWarranty
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
+class CategoryAdmin(StandardHistoryAdmin):
     list_display = ('name', 'created_at')
     search_fields = ('name',)
 
 @admin.register(Brand)
-class BrandAdmin(admin.ModelAdmin):
+class BrandAdmin(StandardHistoryAdmin):
     list_display = ('name', 'created_at')
     search_fields = ('name',)
 
 @admin.register(ModelAsset)
-class ModelAssetAdmin(admin.ModelAdmin):
+class ModelAssetAdmin(StandardHistoryAdmin):
     list_display = ('name', 'brand', 'category')
     list_filter = ('brand', 'category')
     search_fields = ('name', 'brand__name')
@@ -30,12 +33,31 @@ class AssetWarrantyInline(admin.StackedInline):
     extra = 0
 
 @admin.register(Asset)
-class AssetAdmin(admin.ModelAdmin):
+class AssetAdmin(StandardHistoryAdmin):
     list_display = ('asset_tag', 'category', 'brand_model', 'serial_number', 'company', 'status')
     list_filter = ('status', 'property_type', 'company', 'site', 'category')
-    search_fields = ('asset_tag', 'legacy_asset_tag', 'serial_number')
+    search_fields = ('asset_tag', 'legacy_asset_tag', 'serial_number', 'network__hostname', 'current_employee_name')
+    change_form_template = 'admin/inventory/asset/change_form.html'
     inlines = [AssetSpecsInline, AssetNetworkInline, AssetWarrantyInline]
+    audit_related_models = ((AssetSpecs, "asset"), (AssetNetwork, "asset"), (AssetWarranty, "asset"))
     
+    def get_queryset(self, request):
+        from assignments.models import Assignment, AssignmentStatus
+        active = Assignment.objects.filter(asset_id=OuterRef("pk"), status=AssignmentStatus.ACTIVE)
+        return super().get_queryset(request).select_related(
+            "category", "model__brand", "company", "owner_company", "site",
+        ).annotate(current_employee_name=Subquery(active.values("employee__full_name")[:1]))
+
+    def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
+        if obj is not None:
+            from .timeline import asset_timeline
+            context["asset_timeline"] = asset_timeline(request, obj, self.admin_site)
+            context["asset_audit_url"] = reverse(
+                f"admin:inventory_{self.model._meta.model_name}_history", args=[obj.pk],
+            )
+            context["asset_record"] = obj
+        return super().render_change_form(request, context, add, change, form_url, obj)
+
     def brand_model(self, obj):
         if obj.model:
             return f"{obj.model.brand.name} {obj.model.name}"
@@ -43,36 +65,6 @@ class AssetAdmin(admin.ModelAdmin):
     brand_model.short_description = "Marca y Modelo"
     class Media:
         js = ('js/hide_change_reason.js',)
-
-    def save_model(self, request, obj, form, change):
-        if change:
-            changes = []
-            for field in form.changed_data:
-                old_val = form.initial.get(field)
-                new_val = form.cleaned_data.get(field)
-                field_name = obj._meta.get_field(field).verbose_name.title()
-                changes.append(f"{field_name}: {old_val} ➔ {new_val}")
-            
-            if changes:
-                change_message = " | ".join(changes)
-                # Django's default history system looks for a specific format
-                # We inject our custom message directly into the history log
-                from django.contrib.admin.models import LogEntry, CHANGE
-                from django.contrib.contenttypes.models import ContentType
-                
-                super().save_model(request, obj, form, change)
-                
-                LogEntry.objects.log_action(
-                    user_id=request.user.pk,
-                    content_type_id=ContentType.objects.get_for_model(obj).pk,
-                    object_id=obj.pk,
-                    object_repr=str(obj),
-                    action_flag=CHANGE,
-                    change_message=change_message,
-                )
-                return
-        
-        super().save_model(request, obj, form, change)
 
 # --- SEPARACIÓN DEL CEMENTERIO DE ACTIVOS ---
 from django.utils.html import format_html
@@ -84,9 +76,17 @@ if Asset in admin.site._registry:
     admin.site.unregister(Asset)
     
     class ActiveAssetAdmin(OriginalAssetAdmin):
+        list_display = (
+            'legacy_asset_tag', 'assigned_employee', 'brand_model',
+            'serial_number', 'company', 'status',
+        )
+
         def get_queryset(self, request):
-            qs = super().get_queryset(request)
-            return qs.exclude(status__icontains="DECOMMISSION")
+            return super().get_queryset(request).exclude(status__icontains="DECOMMISSION")
+
+        @admin.display(description="Asignado a", ordering="current_employee_name")
+        def assigned_employee(self, obj):
+            return obj.current_employee_name or "Sin asignación"
             
     admin.site.register(Asset, ActiveAssetAdmin)
 
@@ -95,7 +95,7 @@ class DecommissionedAssetAdmin(OriginalAssetAdmin):
     change_form_template = "admin/inventory/decommissionedasset/change_form.html"
     
     def get_queryset(self, request):
-        return super(OriginalAssetAdmin, self).get_queryset(request).filter(status__icontains="DECOMMISSION")
+        return super().get_queryset(request).filter(status__icontains="DECOMMISSION")
         
     def has_add_permission(self, request):
         return False 
@@ -143,7 +143,6 @@ class DecommissionedAssetAdmin(OriginalAssetAdmin):
             fs[1]["fields"] = tuple(fields_list)
 
         fieldsets = [fs for fs in fieldsets if fs[0] not in ("Acciones (Solo Lectura)", "Trazabilidad Histórica Global")]
-        fieldsets.insert(0, ("Trazabilidad Histórica Global", {"fields": ("ciclo_de_vida",)}))
         return fieldsets
 
     def change_view(self, request, object_id, form_url="", extra_context=None):
@@ -156,132 +155,42 @@ class DecommissionedAssetAdmin(OriginalAssetAdmin):
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
     def ciclo_de_vida(self, obj):
-        from django.utils.html import format_html
-        from django.apps import apps
-        
-        html = '<div style="padding: 15px; background-color: #2b2b2b; color: #f8f9fa; border-left: 4px solid #dc3545; border-radius: 4px; margin-bottom: 5px;">'
-        html += '<h4 style="margin-top:0;">🛠️ Historial de Mantenimientos y Novedades</h4><ul style="margin-bottom:15px;">'
-        try:
-            MaintenanceRecord = apps.get_model("maintenance", "MaintenanceRecord")
-            m_records = MaintenanceRecord.objects.filter(asset=obj).order_by("-id")
-            if m_records.exists():
-                for m in m_records:
-                    html += f"<li>[{m.get_type_display()}] <b>{m.get_status_display()}</b> | Resp: {m.reported_by} | {m.description}</li>"
-            else:
-                html += "<li>Sin mantenimientos registrados.</li>"
-        except Exception:
-            pass
-        html += "</ul>"
+        from django.template.loader import render_to_string
+        from django.utils.safestring import mark_safe
+        from maintenance.models import MaintenanceRecord
 
-        html += '<h4>👤 Historial de Asignaciones (Usuarios)</h4><ul style="margin-bottom:0px;">'
-        has_assign = False
-        for rel in obj._meta.related_objects:
-            accessor = rel.get_accessor_name()
-            if accessor and any(k in accessor.lower() for k in ["assign", "asignacion"]):
-                manager = getattr(obj, accessor, None)
-                if manager:
-                    for a in manager.all():
-                        has_assign = True
-                        target = getattr(a, 'employee', getattr(a, 'user', getattr(a, 'location', getattr(a, 'assigned_to', str(a).split('->')[-1]))))
-                        html += f"<li>Asignado a: <b>{target}</b> <span style='color:#dc3545;'>[Cerrado permanentemente por Baja]</span></li>"
-        if not has_assign:
-            html += "<li>Sin asignaciones previas.</li>"
-        html += "</ul></div>"
-        
-        return format_html(html)
+        # Solo se marca como seguro el resultado de una plantilla con autoescape.
+        return mark_safe(render_to_string(
+            "admin/inventory/decommissionedasset/lifecycle.html",
+            {
+                "maintenances": MaintenanceRecord.objects.filter(asset=obj)
+                    .select_related("reported_by").order_by("-created_at", "-pk"),
+                "assignments": obj.assignments.select_related("employee")
+                    .order_by("-assigned_at", "-pk"),
+            },
+        ))
     ciclo_de_vida.short_description = ""
 
-# --- FORZAR VISIBILIDAD DE USUARIOS Y AUDITORÍA ISO 27001 ---
+# La identidad del administrador se conserva; el historial se presenta en core.
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.contrib.auth.admin import UserAdmin, GroupAdmin
-from simple_history import register as history_register
-from simple_history.admin import SimpleHistoryAdmin
-from dataclasses import dataclass
+from accounts.admin import AccountUserAdminMixin, AccountGroupAdminMixin
 
 User = get_user_model()
 
-# 1. Registrar rastreo histórico apuntando la tabla a la app 'inventory'
-try:
-    pass  # (Movido a models.py)
-except Exception:
-    pass
 
-@dataclass
-class UserChange:
-    field: str
-    old: str
-    new: str
-
-# 2. Inyectar vista de auditoría traducida
-
-# --- MOTOR DE DIFERENCIAS ABSOLUTO DE USUARIOS ---
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
-from django.contrib.auth.admin import UserAdmin, GroupAdmin
-from simple_history.admin import SimpleHistoryAdmin
-
-User = get_user_model()
-HistoricalUser = User.history.model
-
-def get_custom_changes(self):
-    prev = self.prev_record
-    if not prev:
-        return []
-        
-    FIELD_MAP = {
-        'password': 'Contraseña',
-        'is_superuser': 'Permisos Superusuario',
-        'username': 'Nombre de Usuario',
-        'first_name': 'Nombres',
-        'last_name': 'Apellidos',
-        'email': 'Correo Electrónico',
-        'is_staff': 'Acceso Panel Admin',
-        'is_active': 'Estado de Cuenta',
-    }
-    
-    changes = []
-    for field in self._meta.fields:
-        f = field.name
-        # Omitir IDs, metadatos y último inicio de sesión (cambia solo)
-        if f.startswith('history_') or f in ['id', 'last_login']:
-            continue
-            
-        old_val = getattr(prev, f, None)
-        new_val = getattr(self, f, None)
-        
-        if old_val != new_val:
-            label = FIELD_MAP.get(f, f)
-            if f == 'password':
-                changes.append({'field': label, 'old': '*** (Anterior)', 'new': '*** Modificada'})
-            else:
-                changes.append({'field': label, 'old': str(old_val), 'new': str(new_val)})
-    return changes
-
-# 1. Inyectamos la función como propiedad nativa del modelo histórico
-HistoricalUser.add_to_class('custom_changes', property(get_custom_changes))
-
-# 2. Restauramos la vista limpia (sin sobreescribir el proceso nativo)
-class AuditedUserAdmin(SimpleHistoryAdmin, UserAdmin):
-    object_history_template = "admin/custom_object_history.html"
-
+class AuditedUserAdmin(AccountUserAdminMixin, StandardHistoryAdmin, UserAdmin):
     def get_readonly_fields(self, request, obj=None):
-        readonly = list(super().get_readonly_fields(request, obj))
-        # Forzar bloqueo estricto de fechas de sistema
-        force_readonly = ['last_login', 'date_joined']
-        for field in force_readonly:
-            if field not in readonly:
-                readonly.append(field)
-        return tuple(readonly)
+        return tuple(super().get_readonly_fields(request, obj)) + ("last_login", "date_joined")
 
-try:
-    admin.site.unregister(User)
-except Exception:
+
+class AuditedGroupAdmin(AccountGroupAdminMixin, StandardHistoryAdmin, GroupAdmin):
     pass
-try:
-    admin.site.unregister(Group)
-except Exception:
-    pass
-    
+
+
+for model in (User, Group):
+    if admin.site.is_registered(model):
+        admin.site.unregister(model)
 admin.site.register(User, AuditedUserAdmin)
-admin.site.register(Group, GroupAdmin)
+admin.site.register(Group, AuditedGroupAdmin)

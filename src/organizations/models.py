@@ -1,3 +1,4 @@
+from simple_history.models import HistoricalRecords
 from django.db import models
 from core.models import BaseModel
 
@@ -6,6 +7,7 @@ class Status(models.TextChoices):
     INACTIVE = 'INACTIVE', 'Inactivo'
 
 class Company(BaseModel):
+    history = HistoricalRecords()
     name = models.CharField(max_length=150, unique=True)
     code = models.CharField(max_length=20, unique=True, help_text="Código corto (ej. ACE, SOL)")
     tax_id = models.CharField(max_length=50, blank=True, null=True, help_text="NIT o documento fiscal")
@@ -19,6 +21,7 @@ class Company(BaseModel):
         return self.name
 
 class Site(BaseModel):
+    history = HistoricalRecords()
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sites')
     name = models.CharField(max_length=150)
     address = models.CharField(max_length=255, blank=True, null=True)
@@ -32,10 +35,20 @@ class Site(BaseModel):
             models.UniqueConstraint(fields=['company', 'name'], name='unique_site_per_company')
         ]
 
+    def clean(self):
+        super().clean()
+        from .validation import validate_container_company
+        validate_container_company(self)
+
+    def save(self, *args, **kwargs):
+        from .validation import save_container
+        return save_container(self, super().save, *args, **kwargs)
+
     def __str__(self):
         return self.name
 
 class Area(BaseModel):
+    history = HistoricalRecords()
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='areas')
     name = models.CharField(max_length=150)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
@@ -46,6 +59,15 @@ class Area(BaseModel):
         constraints = [
             models.UniqueConstraint(fields=['company', 'name'], name='unique_area_per_company')
         ]
+
+    def clean(self):
+        super().clean()
+        from .validation import validate_container_company
+        validate_container_company(self)
+
+    def save(self, *args, **kwargs):
+        from .validation import save_container
+        return save_container(self, super().save, *args, **kwargs)
 
     def __str__(self):
         return self.name

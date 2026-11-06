@@ -1,0 +1,10 @@
+<div class="module">
+  <h3>Historial de mantenimientos y novedades</h3>
+  <ul>{% for maintenance in maintenances %}
+    <li>{{ maintenance.created_at|date:"d/m/Y H:i:s" }} · {{ maintenance.get_type_display }} · <strong>{{ maintenance.get_status_display }}</strong> · Responsable: {{ maintenance.reported_by }} · {{ maintenance.description }}</li>
+  {% empty %}<li>Sin mantenimientos registrados.</li>{% endfor %}</ul>
+  <h3>Historial de asignaciones</h3>
+  <ul>{% for assignment in assignments %}
+    <li>{{ assignment.assigned_at|date:"d/m/Y H:i:s" }} · Asignado a: <strong>{{ assignment.employee }}</strong> · {{ assignment.get_status_display }}{% if assignment.returned_at %} · Devuelto: {{ assignment.returned_at|date:"d/m/Y H:i:s" }}{% endif %}</li>
+  {% empty %}<li>Sin asignaciones previas.</li>{% endfor %}</ul>
+</div>

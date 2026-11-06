@@ -1,3 +1,4 @@
+from simple_history.models import HistoricalRecords
 from django.db import models
 from django.conf import settings
 from core.models import BaseModel
@@ -12,6 +13,7 @@ class AssignmentStatus(models.TextChoices):
 
 
 class Assignment(BaseModel):
+    history = HistoricalRecords()
     asset = models.ForeignKey(
         Asset,
         on_delete=models.PROTECT,
@@ -80,6 +82,35 @@ class Assignment(BaseModel):
             ),
         ]
 
+    def _validate_new_custody(self, using, lock=False):
+        if self.status != AssignmentStatus.ACTIVE or self.employee_id is None:
+            return
+        previous = type(self).objects.using(using).filter(pk=self.pk).values("status", "employee_id").first()
+        if previous and previous["status"] == AssignmentStatus.ACTIVE and previous["employee_id"] == self.employee_id:
+            return
+        from employees.validation import validate_assignment_recipient
+        employees = Employee.objects.using(using)
+        if lock:
+            employees = employees.select_for_update()
+        employee = employees.filter(pk=self.employee_id).first()
+        if employee is not None:
+            validate_assignment_recipient(employee)
+
+    def clean(self):
+        super().clean()
+        from django.db import router
+        self._validate_new_custody(self._state.db or router.db_for_write(type(self), instance=self))
+
+    def save(self, *args, **kwargs):
+        from django.db import router, transaction
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        fields = kwargs.get("update_fields")
+        with transaction.atomic(using=using):
+            if self.status == AssignmentStatus.ACTIVE and (fields is None or {"status", "employee", "employee_id"}.intersection(fields)):
+                Asset.objects.using(using).select_for_update().filter(pk=self.asset_id).first()
+                self._validate_new_custody(using, lock=True)
+            return super().save(*args, **kwargs)
+
     def __str__(self):
         return (
             f"{self.asset.asset_tag} -> "
@@ -98,6 +129,7 @@ class EmployeeAssetSummary(Employee):
 
 # Modelo para actas de devolución
 class OffboardingRecord(BaseModel):
+    history = HistoricalRecords()
     employee = models.ForeignKey(
         Employee,
         on_delete=models.PROTECT,
@@ -135,6 +167,7 @@ class OffboardingRecord(BaseModel):
 
 
 class OffboardingRecordItem(BaseModel):
+    history = HistoricalRecords()
     offboarding_record = models.ForeignKey(
         OffboardingRecord,
         on_delete=models.CASCADE,

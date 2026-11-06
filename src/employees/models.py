@@ -42,6 +42,15 @@ class Employee(BaseModel):
             )
         ]
 
+    def clean(self):
+        super().clean()
+        from organizations.validation import validate_company_links
+        validate_company_links(self)
+
+    def save(self, *args, **kwargs):
+        from organizations.validation import save_with_company_links
+        return save_with_company_links(self, super().save, *args, **kwargs)
+
     def __str__(self):
         return f"{self.full_name} ({self.company.code})"
 

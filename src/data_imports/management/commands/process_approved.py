@@ -3,7 +3,7 @@ from django.db import transaction
 from data_imports.models import StagingAsset, ImportStatus
 from organizations.models import Company, Site, Area
 from employees.models import Employee
-from inventory.models import Category, Brand, Model, Asset, AssetSpecs, AssetNetwork
+from inventory.models import Category, Brand, ModelAsset, Asset, AssetSpecs, AssetNetwork
 
 class Command(BaseCommand):
     help = 'Migra los registros aprobados de Staging a Producción'
@@ -52,7 +52,7 @@ class Command(BaseCommand):
                     # 3. Clasificación del Inventario
                     cat, _ = Category.objects.get_or_create(name=stg.element or 'Sin Categoría')
                     brand, _ = Brand.objects.get_or_create(name=stg.brand or 'Genérica')
-                    model_obj, _ = Model.objects.get_or_create(name=stg.model or 'Genérico', brand=brand, category=cat)
+                    model_obj, _ = ModelAsset.objects.get_or_create(name=stg.model or 'Genérico', brand=brand, category=cat)
                     
                     # 4. Generación del Código Interno
                     current_asset_count += 1
