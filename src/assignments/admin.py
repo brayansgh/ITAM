@@ -80,6 +80,8 @@ def generate_pdf_action(modeladmin, request, queryset):
 @admin.register(Assignment)
 class AssignmentAdmin(admin.ModelAdmin):
 
+    exclude = ("signed_act_pdf",)
+
     list_display = (
         "asset",
         "employee",
@@ -209,7 +211,7 @@ class AssignmentAdmin(admin.ModelAdmin):
                 "return_condition",
                 "status",
                 "observations",
-                "signed_act_pdf",
+                "download_pdf",
             )
 
         return (
@@ -218,7 +220,7 @@ class AssignmentAdmin(admin.ModelAdmin):
             "returned_at",
             "return_condition",
             "status",
-            "signed_act_pdf",
+            "download_pdf",
         )
 
     @admin.display(description="Acta PDF")
@@ -441,7 +443,7 @@ class OffboardingRecordAdmin(admin.ModelAdmin):
         "employee",
         "received_by",
         "observations",
-        "pdf",
+        "view_pdf",
         "created_at",
         "updated_at",
     )
@@ -451,7 +453,7 @@ class OffboardingRecordAdmin(admin.ModelAdmin):
         "received_by",
         "created_at",
         "observations",
-        "pdf",
+        "view_pdf",
     )
 
     inlines = [OffboardingRecordItemInline]

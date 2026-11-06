@@ -3,7 +3,7 @@ import uuid
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
-from django.test import TestCase, TransactionTestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 
 from accounts.models import User
 from organizations.models import Company
@@ -540,3 +540,23 @@ class AssignmentPDFDownloadTests(
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 302)
+
+class PrivateMediaRoutingTests(SimpleTestCase):
+    @override_settings(DEBUG=True)
+    def test_media_is_not_served_even_in_debug(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            from pathlib import Path
+            Path(media_root, "synthetic.pdf").write_bytes(b"%PDF-1.4 synthetic")
+            with override_settings(MEDIA_ROOT=media_root):
+                response = self.client.get("/media/synthetic.pdf")
+                self.assertEqual(response.status_code, 404)
+
+
+class PrivateAssignmentAdminFormTests(SimpleTestCase):
+    def test_pdf_file_cannot_be_edited_in_admin(self):
+        request = RequestFactory().get("/admin/")
+        request.user = User(role=Role.TECHNOLOGY, is_staff=True, is_active=True)
+        model_admin = AssignmentAdmin(Assignment, AdminSite())
+        form = model_admin.get_form(request)
+        self.assertNotIn("signed_act_pdf", form.base_fields)
+        self.assertIn("download_pdf", model_admin.get_readonly_fields(request))
