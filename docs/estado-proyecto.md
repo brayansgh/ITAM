@@ -301,3 +301,54 @@ Por solicitud del usuario, AGENTS.md se conserva localmente y se retira del segu
 ## Versionado de la interfaz corporativa
 
 El usuario solicitó expresamente hacer commit y push de la implementación anterior. Se incluyen código, migraciones, pruebas, recursos gráficos y documentación; AGENTS.md, respaldos privados y configuraciones temporales quedan excluidos. Las 163 pruebas y comprobaciones de despliegue corresponden a la ejecución documentada arriba; no se repitieron por esta operación de versionado.
+
+## Pulido de dashboard — 6 de noviembre de 2026
+
+- Aumento de tipografía de 2 px, bienvenida, iconos emoji, marca con silueta original en blanco y corrección de etiquetas/controles de búsqueda y filtros. Se corrigió también la altura de la cabecera móvil.
+- `manage.py check`: sin problemas. `git diff --check`: correcto.
+- Pruebas de core en copia aislada: **36 pruebas, OK**, 15,599 s, PostgreSQL temporal `test_itam_interface_20261106`, distinto de producción y sin TEST.MIRROR; destruido al finalizar. Se actualizó la expectativa del recurso del logo. No se repitió la suite completa.
+- Chromium con datos sintéticos: dashboard, inventario, ficha y formulario a 1440, 1024, 390 y 320 px, sin desbordamiento horizontal de página ni errores JavaScript. Base tipográfica de 16 px y etiqueta accesible de búsqueda de 1 px verificados. Fuente de emojis descargada y extraída solo en /tmp para las capturas, sin instalar paquetes del sistema.
+- Sin migraciones ni modificaciones de datos de negocio, permisos, Nginx o Docker Compose. Sin commit ni push.
+
+- Base sintética de vista previa retirada al finalizar. Capturas conservadas fuera del repositorio.
+
+## Ajuste de colores de marca — 6 de noviembre de 2026
+
+- Cabecera de Admin y login cambiada de gris a azul de marca #78A3B9. Acciones y Actualizar naranja #F37035 con texto blanco. Buscador integrado bajo un borde común, campo y botón alineados en altura. Versión del CSS actualizada para renovar caché.
+- `manage.py check` y `git diff --check` correctos. Chromium: dashboard y login con HTML sintético a 1440, 390 y 320 px; colores calculados verificados, sin desbordamiento horizontal ni errores JavaScript. Renderizado sin crear sesiones ni bases de datos.
+- Cambio de presentación; no se repitieron pruebas de negocio. Sin cambios de permisos, datos, infraestructura, migraciones, commit ni push.
+
+## Favicon de la palma — 6 de noviembre de 2026
+
+- Plantilla compartida del Admin y login con favicon PNG del logo original `static/img/palma.png`.
+- Verificado login HTTP 200 con etiqueta de favicon, imagen real HTTP 200 y `manage.py check` sin problemas. Sin cambios de datos ni infraestructura.
+
+- Ajuste solicitado: favicon cambiado a la variante blanca existente `palma-cabecera.png`. Login e imagen verificados con HTTP 200.
+
+## Paleta #036 y simplificación de guardado — 6 de noviembre de 2026
+
+- Color principal #003366 (#036), incluidos Admin y login; acentos/botones #F37035 con texto blanco. Eliminación y confirmación de eliminación conservan rojo.
+- Plantilla global de barra: Guardar, Cancelar y Eliminar según permisos. Retirados Guardar como nuevo, Guardar y añadir otro y Guardar y continuar editando. No se modifican servicios ni autorizaciones.
+- Corregido recorte de Cancelar/Eliminar: altura automática, mínimo 44 px y alineación uniforme; distribución adaptable a móvil.
+- **38 pruebas de core, OK**, 16,114 s, en copia aislada y PostgreSQL temporal test_itam_interface_20261106, distinto de producción y sin TEST.MIRROR; destruido al finalizar. Nuevas comprobaciones de formularios en diez módulos y usuario con solo permiso de consulta.
+- Chromium sobre HTML sintético: dashboard, login y formulario a 1440, 390 y 320 px; colores calculados correctos, tres botones de 44,39 px, sin desbordamiento de página ni errores JavaScript. Sin escrituras de negocio para la revisión visual.
+- `manage.py check` y `git diff --check` correctos. No se repitió la suite completa; sin migraciones, cambios de infraestructura, commit ni push. Se conservan cambios locales ajenos en base.css, marca y configuración del editor.
+
+## Botón de navegación y retirada de acciones masivas — 6 de noviembre de 2026
+
+- Botón de mostrar/ocultar menú trasladado del lateral a la marca de cabecera, dentro del flujo; respeta el nombre C.I. ACEPALMA editado por el usuario. Sin posición absoluta dependiente del ancho del título. CSS actualizado a versión 20261106-5.
+- Acciones masivas desactivadas en StandardHistoryAdmin y en RetiredEmployeeAdmin. Desaparecen selector Acción / Ir y casillas; también quedan deshabilitados los POST de acciones masivas. Se mantienen permisos y operaciones individuales de las fichas; no se borraron funciones de servicio.
+- **40 pruebas de core, OK**, 17,041 s, en copia aislada y PostgreSQL temporal test_itam_interface_20261106, distinto de producción y sin TEST.MIRROR; destruido al finalizar. Cobertura de todos los administradores registrados, renderizado de nueve listados y POST de borrado masivo sin efecto sobre datos sintéticos; botón único en cabecera y ausente en login.
+- Chromium con HTML sintético: 1440, 1024, 768, 390 y 320 px; título actual y otro largo sin superposición ni desbordamiento. Funcionamiento de abrir/cerrar y estado aria-expanded comprobados, sin errores JavaScript.
+- `manage.py check` y `git diff --check` correctos. No se repitió la suite completa. Sin cambios de datos de producción, migraciones, infraestructura, commit ni push; se preservan los cambios locales ajenos.
+
+## Acciones de la ficha sin superposición — 6 de noviembre de 2026
+
+- Editar activo e Histórico comparten ahora la barra de acciones de la ficha, con separación de 12 px, altura uniforme y ajuste de fila. Se retira el margen negativo de esa barra únicamente en la plantilla común de activos y bajas. Se conserva el permiso de edición y la herramienta de historial heredada.
+- **13 pruebas de interfaz, OK**, 6,097 s, PostgreSQL temporal test_itam_interface_20261106, separado de producción y sin TEST.MIRROR; destruido al finalizar. Regresión: edición e historial presentes dentro de la misma barra.
+- Chromium con ficha sintética y recursos de Django: 1920, 1440, 1024, 768, 390 y 320 px; rectángulos de ambos enlaces sin intersección, sin desbordamiento horizontal ni errores JavaScript.
+- `manage.py check` y `git diff --check` correctos. No se repitió la suite completa. Sin cambios de datos, infraestructura, migraciones, commit ni push.
+
+## Versionado del pulido de interfaz — 6 de noviembre de 2026
+
+El usuario solicitó commit y push de todos los cambios pendientes, incluidos los suyos: nombre C.I. ACEPALMA, título y pie de página, color base y configuración de lanzamiento de Chrome en .vscode/launch.json. Se incluyen también los ajustes de dashboard, favicon, tipografía, paleta, buscador, botones, navegación, retirada de acciones masivas y sus pruebas/documentación. AGENTS.md permanece local e ignorado; respaldos y archivos temporales quedan fuera. Las 40 pruebas de core y las 13 pruebas finales de interfaz corresponden a las ejecuciones anteriores documentadas; no se repitieron por esta operación de versionado.

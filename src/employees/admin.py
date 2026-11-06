@@ -311,6 +311,8 @@ class EmployeeAdmin(StandardHistoryAdmin):
 @admin.register(RetiredEmployee)
 class RetiredEmployeeAdmin(admin.ModelAdmin):
 
+    actions = None
+
     list_display = (
         "full_name",
         "document_number",

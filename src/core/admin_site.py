@@ -45,18 +45,19 @@ class ITAMAdminSite(AdminSite):
             ('Administración', [('accounts.user', 'Usuarios y permisos'), ('auth.group', 'Grupos'), ('data_imports.stagingasset', 'Importaciones')]),
         ]
         available = {f"{app['app_label']}.{m['object_name'].lower()}": m for app in context['available_apps'] for m in app['models']}
+        icons = {'inventory.asset': '💻', 'inventory.category': '🗂️', 'inventory.brand': '🏷️', 'inventory.modelasset': '🖥️', 'assignments.assignment': '🔄', 'assignments.employeeassetsummary': '👥', 'maintenance.maintenancerecord': '🔧', 'employees.employee': '👤', 'employees.retiredemployee': '👥', 'organizations.company': '🏢', 'organizations.site': '📍', 'organizations.area': '🏬', 'accounts.user': '🔐', 'auth.group': '👥', 'data_imports.stagingasset': '📥'}
         menu = []
         for label, models in groups:
-            links = [{'label': title, 'url': available[key]['admin_url']} for key, title in models
+            links = [{'label': title, 'icon': icons[key], 'url': available[key]['admin_url']} for key, title in models
                      if key in available and available[key].get('admin_url')]
             if label == 'Movimientos' and ('maintenance.maintenancerecord' in available or 'inventory.decommissionedasset' in available):
-                links.append({'label': 'Bajas', 'url': reverse('admin:itam_decommissions')})
+                links.append({'label': 'Bajas', 'icon': '🗑️', 'url': reverse('admin:itam_decommissions')})
             if label == 'Administración' and available:
-                links.append({'label': 'Auditoría', 'url': reverse('admin:itam_audit')})
+                links.append({'label': 'Auditoría', 'icon': '📋', 'url': reverse('admin:itam_audit')})
             if links:
                 menu.append({'label': label, 'links': links})
         if any(k in available for k in ('assignments.assignment', 'assignments.offboardingrecord', 'maintenance.maintenancerecord')):
-            menu.insert(min(3, len(menu)), {'label': 'Documentación', 'links': [{'label': 'Documentos y actas', 'url': reverse('admin:itam_documents')}]})
+            menu.insert(min(3, len(menu)), {'label': 'Documentación', 'links': [{'label': 'Documentos y actas', 'icon': '📄', 'url': reverse('admin:itam_documents')}]})
         context.update(itam_menu=menu, itam_now=timezone.now())
         return context
 
@@ -74,8 +75,8 @@ class ITAMAdminSite(AdminSite):
         tickets = self.visible_queryset(request, MaintenanceRecord)
         counts = dict(assets.values('status').annotate(n=Count('pk')).values_list('status', 'n'))
         base = reverse('admin:inventory_asset_changelist')
-        metrics = [{'label': 'Activos registrados', 'value': sum(counts.values()), 'url': base, 'icon': '▤'}]
-        for status, label, icon in [(AssetStatus.ASSIGNED, 'Estado asignado', '♙'), (AssetStatus.AVAILABLE, 'Disponibles', '□'), (AssetStatus.IN_MAINTENANCE, 'En mantenimiento', '⚒'), (AssetStatus.DECOMMISSIONED, 'Dados de baja', '▣')]:
+        metrics = [{'label': 'Activos registrados', 'value': sum(counts.values()), 'url': base, 'icon': '💻'}]
+        for status, label, icon in [(AssetStatus.ASSIGNED, 'Estado asignado', '✅'), (AssetStatus.AVAILABLE, 'Disponibles', '📦'), (AssetStatus.IN_MAINTENANCE, 'En mantenimiento', '🔧'), (AssetStatus.DECOMMISSIONED, 'Dados de baja', '🗑️')]:
             target = reverse('admin:inventory_decommissionedasset_changelist') if status == AssetStatus.DECOMMISSIONED else base + '?' + urlencode({'status__exact': status})
             metrics.append({'label': label, 'value': counts.get(status, 0), 'url': target, 'icon': icon})
         asset_admin = self._registry[Asset]

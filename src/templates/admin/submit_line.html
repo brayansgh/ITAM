@@ -1,8 +1,5 @@
 {% load admin_urls %}<div class="submit-row">
 {% if show_save %}<input type="submit" value="Guardar" class="default" name="_save">{% endif %}
-{% if show_save_as_new %}<input type="submit" value="Guardar como nuevo" name="_saveasnew">{% endif %}
-{% if show_save_and_add_another %}<input type="submit" value="Guardar y añadir otro" name="_addanother">{% endif %}
-{% if show_save_and_continue %}<input type="submit" value="Guardar y continuar editando" name="_continue">{% endif %}
 {% if show_close or show_save %}{% if asset_record or employee_detail %}<a class="closelink itam-cancel" href="{% url opts|admin_urlname:'change' original.pk|admin_urlquote %}">Cancelar</a>{% else %}<a class="closelink itam-cancel" href="{% url opts|admin_urlname:'changelist' %}">{% if show_save %}Cancelar{% else %}Volver al listado{% endif %}</a>{% endif %}{% endif %}
 {% if show_delete_link and original %}{% url opts|admin_urlname:'delete' original.pk|admin_urlquote as delete_url %}<p class="deletelink-box"><a class="deletelink" href="{% add_preserved_filters delete_url %}">Eliminar</a></p>{% endif %}
 </div>

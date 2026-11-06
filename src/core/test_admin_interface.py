@@ -24,8 +24,66 @@ class CorporateAdminTests(TestCase):
             with self.subTest(route=route):
                 response = self.client.get(reverse(route, args=args))
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, 'palma-cabecera.png')
+                self.assertContains(response, 'img/palma.png')
                 self.assertContains(response, 'itam/admin.css')
+
+    def test_forms_offer_only_the_standard_save_action(self):
+        for model in ['inventory_category', 'inventory_brand', 'inventory_asset',
+                      'employees_employee', 'organizations_company',
+                      'organizations_site', 'accounts_user', 'auth_group',
+                      'assignments_assignment', 'maintenance_maintenancerecord']:
+            with self.subTest(model=model):
+                response = self.client.get(reverse(f'admin:{model}_add'))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'name="_save"')
+                for action in ['_addanother', '_continue', '_saveasnew']:
+                    self.assertNotContains(response, f'name="{action}"')
+        response = self.client.get(reverse('admin:inventory_category_change', args=[self.category.pk]))
+        self.assertContains(response, 'name="_save"')
+        self.assertContains(response, 'class="closelink itam-cancel"')
+        self.assertContains(response, 'class="deletelink"')
+
+    def test_read_only_form_does_not_gain_save_or_delete_buttons(self):
+        viewer = User.objects.create_user(username='category_viewer', is_staff=True, role='OTHER')
+        viewer.user_permissions.add(Permission.objects.get(codename='view_category'))
+        self.client.force_login(viewer)
+        response = self.client.get(reverse('admin:inventory_category_change', args=[self.category.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'name="_save"')
+        self.assertNotContains(response, 'class="deletelink"')
+        self.assertContains(response, 'Volver al listado')
+
+    def test_navigation_toggle_belongs_to_header_branding(self):
+        response = self.client.get(reverse('admin:index'))
+        html = response.content.decode()
+        branding = html.split('<div id="branding">', 1)[1].split('</div>', 1)[0]
+        self.assertIn('class="itam-menu-toggle"', branding)
+        self.assertEqual(html.count('class="itam-menu-toggle"'), 1)
+        self.client.logout()
+        self.assertNotContains(self.client.get(reverse('admin:login')), 'class="itam-menu-toggle"')
+
+    def test_admin_lists_have_no_bulk_actions_or_selection_checkboxes(self):
+        from django.contrib import admin
+        from django.test import RequestFactory
+        request = RequestFactory().get('/')
+        request.user = self.user
+        for model, model_admin in admin.site._registry.items():
+            with self.subTest(model=model._meta.label):
+                self.assertEqual(model_admin.get_actions(request), {})
+        for model in ['inventory_category', 'inventory_asset', 'employees_employee',
+                      'employees_retiredemployee', 'assignments_assignment',
+                      'maintenance_maintenancerecord', 'data_imports_stagingasset',
+                      'accounts_user', 'auth_group']:
+            with self.subTest(listing=model):
+                response = self.client.get(reverse(f'admin:{model}_changelist'))
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, 'name="action"')
+                self.assertNotContains(response, 'name="_selected_action"')
+                self.assertNotContains(response, 'id="action-toggle"')
+        self.client.post(reverse('admin:inventory_category_changelist'), {
+            'action': 'delete_selected', '_selected_action': str(self.category.pk), 'post': 'yes',
+        })
+        self.assertTrue(Category.objects.filter(pk=self.category.pk).exists())
 
     def test_search_finds_primary_plate_and_internal_code_and_employee(self):
         for term in ['PL-SYNTHETIC', 'ACE-0001', 'Persona sintética']:
@@ -52,6 +110,10 @@ class CorporateAdminTests(TestCase):
         detail = self.client.get(route)
         self.assertTrue(detail.context['asset_detail'])
         self.assertContains(detail, 'Editar activo')
+        html = detail.content.decode()
+        tools = html.split('<ul class="object-tools">', 1)[1].split('</ul>', 1)[0]
+        self.assertIn('Editar activo', tools)
+        self.assertIn(reverse('admin:inventory_asset_history', args=[self.asset.pk]), tools)
         self.assertNotContains(detail, 'name="_save"')
         edit = self.client.get(route, {'editar': 1})
         self.assertFalse(edit.context['asset_detail'])
