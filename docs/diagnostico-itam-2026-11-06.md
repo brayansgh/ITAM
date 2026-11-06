@@ -46,7 +46,7 @@ digital, porque la generación de un PDF por sí misma no la demuestra.
 | H04 | P1 | Dos tickets abiertos; completar uno deja el activo AVAILABLE aunque el otro sigue OPEN. gap_03. | Disponibilidad incorrecta y posible reasignación durante reparación. Calcular transición considerando tickets vigentes, custodia y bajas, dentro de transacción. |
 | H05 | P1 | Un activo con asignación ACTIVE puede guardarse manualmente con estado AVAILABLE. gap_05. | Inventario y custodia se contradicen. Restringir transiciones de estado en servidor y centralizarlas; detectar inconsistencias existentes antes de corregir datos. |
 | H06 | P2 | `create_assignment` acepta un empleado RETIRO. gap_04. | Se pueden entregar activos a empleados retirados. Verificar estado del empleado con una regla de negocio explícita y pruebas; decidir tratamiento de INACTIVE. |
-| H07 | P2 | Un activo de compañía A acepta una sede perteneciente a compañía B incluso con full_clean. gap_08. | Datos organizativos incoherentes. Validar coherencia compañía/sede/área y revisar excepciones de activos prestados entre compañías por separado. |
+| H07 | Política aclarada | El activo acepta una sede perteneciente a otra compañía. | El usuario confirmó que es una ubicación física compartida válida. Se retiró la restricción que introdujimos para activos; no se modifica por ello la política de sede/área de empleados. |
 | H08 | P2 | El historial del activo solo incorpora como relacionados especificaciones, red y garantías; no asignaciones ni mantenimientos. gap_11. | No hay una cronología completa de custodia/servicio en la ficha del activo. Integrar esas fuentes preservando su identidad y fechas reales. |
 | H09 | P2 | El buscador de activos solo busca código interno, placa heredada y serie. gap_12. | Mostrar al asignatario no permite encontrar los activos por su nombre. Agregar búsqueda/filtro de responsable vigente y accesos desde empleado, mantenimiento y actas. |
 | H10 | Decisión de diseño | Dos activos pueden compartir placa heredada, actualmente primera columna del listado. gap_09. | Identificación visual ambigua; la clave interna sí es única. Mostrar siempre un identificador único y fallback para placa vacía. Definir si la placa debe ser única globalmente o por compañía antes de imponer restricciones. |
@@ -254,3 +254,38 @@ H08/H09 abordados:
   y contenido. El botón de edición manual en baja requiere permiso de modificación.
 - Casos 11/12 del diagnóstico convertidos en regresiones. La placa heredada sigue sin
   nueva restricción de unicidad; la política de devolución voluntaria continúa abierta.
+
+## Corrección de la interpretación de sede en activos
+
+El usuario confirmó que una sede física puede compartirse entre compañías. El supuesto
+original de H07 era incorrecto para activos: ubicación, administración y propiedad son
+dimensiones independientes. La restricción introducida provocó un bloqueo al enviar
+un activo existente a mantenimiento, aunque el usuario no cambiara su sede.
+
+Se permite la sede de otra compañía en altas, edición, guardados ordinarios y ciclos
+operativos de activos. La política de sede/área de empleados permanece sin cambios.
+Se ajustan las validaciones de cambio de compañía de sedes y la limpieza para no tratar
+activos compartidos como empleados de esa compañía. Las fusiones siguen agrupándose
+por compañía propietaria de la sede, sin fusionar automáticamente compañías distintas.
+No se cambia la compañía ni la sede de registros reales para sortear la validación.
+
+## Regresión de guardado reportada posteriormente
+
+El usuario intentó enviar a mantenimiento un activo que figuraba AVAILABLE, con
+custodia ACTIVE y un ticket histórico DECOMMISSION/COMPLETED. La creación automática
+del ticket de mantenimiento recalculaba el estado usando aquella baja histórica,
+intentaba DECOMMISSIONED y fallaba con la custodia vigente dentro de save().
+
+Se eliminó esa reinterpretación del historial. Solo el cierre explícito de la baja
+solicita esa transición; mantenimiento/devolución ordinarios evalúan trabajos actuales
+sin ejecutar de nuevo un evento histórico. Se preserva la baja de activos que ya
+están DECOMMISSIONED y todos sus controles de inmutabilidad.
+
+Se detectó también validación de compañía en ubicaciones aunque solo cambiara su
+nombre/dirección. Se limita la validación de reasignación al cambio real de compañía.
+Los cambios de ubicación/metadatos no exigen corregir simultáneamente estados heredados
+sin cambios; las transiciones nuevas siguen validadas y no se reparan datos reales.
+
+Los ValidationError tardíos de Admin se capturan tras rollback con un mensaje de
+operación no guardada y retorno al formulario. Las pruebas fuerzan un fallo posterior
+al guardado principal para demostrar la reversión de datos e historial.

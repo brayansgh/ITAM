@@ -20,15 +20,26 @@ class ModelAssetAdmin(StandardHistoryAdmin):
     list_filter = ('brand', 'category')
     search_fields = ('name', 'brand__name')
 
-class AssetSpecsInline(admin.StackedInline):
+class FrozenAssetInlineMixin:
+    def has_add_permission(self, request, obj=None):
+        return not (obj and obj.status == "DECOMMISSIONED") and super().has_add_permission(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        return not (obj and obj.status == "DECOMMISSIONED") and super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return not (obj and obj.status == "DECOMMISSIONED") and super().has_delete_permission(request, obj)
+
+
+class AssetSpecsInline(FrozenAssetInlineMixin, admin.StackedInline):
     model = AssetSpecs
     can_delete = False
 
-class AssetNetworkInline(admin.StackedInline):
+class AssetNetworkInline(FrozenAssetInlineMixin, admin.StackedInline):
     model = AssetNetwork
     can_delete = False
 
-class AssetWarrantyInline(admin.StackedInline):
+class AssetWarrantyInline(FrozenAssetInlineMixin, admin.StackedInline):
     model = AssetWarranty
     extra = 0
 
@@ -48,6 +59,16 @@ class AssetAdmin(StandardHistoryAdmin):
             "category", "model__brand", "company", "owner_company", "site",
         ).annotate(current_employee_name=Subquery(active.values("employee__full_name")[:1]))
 
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        for name, label in (("company", "Compañía administradora"), ("owner_company", "Compañía propietaria"),
+                            ("site", "Ciudad / ubicación física")):
+            if name in form.base_fields:
+                form.base_fields[name].label = label
+        if "site" in form.base_fields:
+            form.base_fields["site"].help_text = "Ubicación física del activo; no requiere asociación con una compañía."
+        return form
+
     def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
         if obj is not None:
             from .timeline import asset_timeline
@@ -57,6 +78,16 @@ class AssetAdmin(StandardHistoryAdmin):
             )
             context["asset_record"] = obj
         return super().render_change_form(request, context, add, change, form_url, obj)
+
+    def has_change_permission(self, request, obj=None):
+        if obj is not None and obj.status == "DECOMMISSIONED":
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and obj.status == "DECOMMISSIONED":
+            return False
+        return super().has_delete_permission(request, obj)
 
     def brand_model(self, obj):
         if obj.model:
@@ -100,59 +131,11 @@ class DecommissionedAssetAdmin(OriginalAssetAdmin):
     def has_add_permission(self, request):
         return False 
 
-    def get_readonly_fields(self, request, obj=None):
-        readonly = list(super().get_readonly_fields(request, obj))
-        custom_fields = ["ciclo_de_vida"]
-        if request.GET.get("force_edit") != "1":
-            fields = [f.name for f in self.model._meta.fields if f.name != "id"]
-            return list(set(readonly + fields + custom_fields))
-        return list(set(readonly + custom_fields))
+    def has_change_permission(self, request, obj=None):
+        return False
 
-    def get_inline_instances(self, request, obj=None):
-        inline_instances = super().get_inline_instances(request, obj)
-        if request.GET.get("force_edit") != "1":
-            for inline in inline_instances:
-                # Asegurar que el anexo siempre sea visible aunque no tenga datos
-                inline.extra = 1 if getattr(inline, 'extra', 0) == 0 else inline.extra
-                inline.can_delete = False
-                inline.has_add_permission = lambda request, obj=None: True
-                inline.has_delete_permission = lambda request, obj=None: False
-                
-                # Fábrica para evitar el bug de mezcla de datos de Python
-                def make_disabled_formset(orig_formset):
-                    def get_disabled_formset(req, object=None, **kwargs):
-                        fs = orig_formset(req, object, **kwargs)
-                        class DisabledFS(fs):
-                            def add_fields(self, form, index):
-                                super().add_fields(form, index)
-                                for name, field in form.fields.items():
-                                    field.disabled = True
-                        return DisabledFS
-                    return get_disabled_formset
-                
-                inline.get_formset = make_disabled_formset(inline.get_formset)
-        return inline_instances
-
-    def get_fieldsets(self, request, obj=None):
-        fieldsets = list(super().get_fieldsets(request, obj))
-        for fs in fieldsets:
-            fields_list = list(fs[1].get("fields", []))
-            for f_name in ["boton_edicion_manual", "ciclo_de_vida"]:
-                if f_name in fields_list:
-                    fields_list.remove(f_name)
-            fs[1]["fields"] = tuple(fields_list)
-
-        fieldsets = [fs for fs in fieldsets if fs[0] not in ("Acciones (Solo Lectura)", "Trazabilidad Histórica Global")]
-        return fieldsets
-
-    def change_view(self, request, object_id, form_url="", extra_context=None):
-        extra_context = extra_context or {}
-        if request.GET.get("force_edit") != "1":
-            extra_context["show_save"] = False
-            extra_context["show_save_and_continue"] = False
-            extra_context["show_save_and_add_another"] = False
-            extra_context["show_delete"] = False
-        return super().change_view(request, object_id, form_url, extra_context=extra_context)
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     def ciclo_de_vida(self, obj):
         from django.template.loader import render_to_string

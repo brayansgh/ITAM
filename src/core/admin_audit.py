@@ -2,11 +2,11 @@ from django.contrib.admin.models import LogEntry
 from django.contrib.admin.utils import unquote
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.db.migrations.recorder import MigrationRecorder
-from django.http import Http404
+from django.http import Http404, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.utils import timezone
 from simple_history.admin import SimpleHistoryAdmin
@@ -20,6 +20,17 @@ class StandardHistoryAdmin(SimpleHistoryAdmin):
     object_history_template = "admin/core/audit_history.html"
     audit_related_models = ()
     audit_page_size = 50
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        try:
+            # ModelAdmin termina su transacción antes de devolver esta excepción.
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        except ValidationError as error:
+            if request.method != "POST":
+                raise
+            from django.contrib import messages
+            self.message_user(request, "No se guardaron los cambios: " + "; ".join(error.messages), level=messages.ERROR)
+            return HttpResponseRedirect(request.get_full_path())
 
     def history_form_view(self, request, object_id, version_id, extra_context=None):
         # Restaurar una versión saltaría los servicios de asignación/devolución.

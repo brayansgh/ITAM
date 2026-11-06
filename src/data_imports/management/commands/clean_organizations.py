@@ -62,8 +62,11 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("Tratamiento de datos finalizado con éxito."))
 
     def move_relation(self, queryset, field, target):
-        instances = list(queryset.select_for_update())
-        if any(instance.company_id != target.company_id for instance in instances):
+        instances = list(queryset.select_related(field).select_for_update(of=("self",)))
+        if queryset.model._meta.concrete_model._meta.label_lower == "inventory.asset" and field == "site":
+            if any(instance.site_id and instance.site.company_id != target.company_id for instance in instances):
+                raise ValidationError("No se pueden fusionar sedes de compañías diferentes.")
+        elif any(instance.company_id != target.company_id for instance in instances):
             raise ValidationError("No se pueden fusionar relaciones entre compañías diferentes.")
         for instance in instances:
             setattr(instance, field, target)

@@ -70,15 +70,17 @@ class OrganizationIntegrityTests(TestCase):
         self.assertEqual(self.employee.site, self.site)
         self.assertEqual(self.employee.area, self.area)
 
-    def test_asset_wrong_site_is_rejected_in_model_and_form(self):
+    def test_asset_shared_site_is_allowed_in_model_and_form(self):
         self.asset.site = self.foreign_site
-        with self.assertRaises(ValidationError): self.asset.full_clean()
-        with self.assertRaises(ValidationError): self.asset.save()
+        self.asset.full_clean()
+        self.asset.save()
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.site, self.foreign_site)
+        self.assertEqual(self.asset.company, self.company)
         form_type = modelform_factory(Asset, fields=["company", "site", "category", "asset_tag"])
         form = form_type(data={"company": self.company.pk, "site": self.foreign_site.pk,
                                "category": self.category.pk, "asset_tag": "ORG-NEW"})
-        self.assertFalse(form.is_valid())
-        self.assertIn("site", form.errors)
+        self.assertTrue(form.is_valid(), form.errors)
 
     def test_parent_company_change_cannot_invalidate_existing_links(self):
         for obj in (self.site, self.area):
@@ -111,7 +113,10 @@ class OrganizationIntegrityTests(TestCase):
         self.asset.refresh_from_db()
         self.assertEqual(self.asset.company, self.company)
         self.asset.company = self.other
-        with self.assertRaises(ValidationError): self.asset.save(update_fields=["company"])
+        self.asset.save(update_fields=["company"])
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.company, self.other)
+        self.assertEqual(self.asset.site, self.site)
 
     def test_valid_company_site_area_transfer_can_be_saved_together(self):
         self.employee.company = self.other
@@ -122,11 +127,15 @@ class OrganizationIntegrityTests(TestCase):
         self.assertEqual(self.employee.company, self.other)
         self.assertEqual(self.employee.site, self.foreign_site)
 
-    def test_site_guard_also_applies_when_only_assets_reference_it(self):
+    def test_site_can_change_owner_when_only_shared_assets_reference_it(self):
         self.employee.site = None
         self.employee.save()
         self.site.company = self.other
-        with self.assertRaises(ValidationError): self.site.save()
+        self.site.save()
+        self.asset.refresh_from_db()
+        self.asset.full_clean()
+        self.assertEqual(self.asset.site, self.site)
+        self.assertEqual(self.asset.company, self.company)
 
     def test_cleanup_keeps_same_named_sites_and_areas_of_different_companies(self):
         from io import StringIO
@@ -148,3 +157,71 @@ class OrganizationIntegrityTests(TestCase):
             Command().move_relation(Asset.objects.filter(pk=self.asset.pk), "site", self.foreign_site)
         self.asset.refresh_from_db()
         self.assertEqual(self.asset.site, self.site)
+
+    def test_shared_site_allows_real_admin_transition_to_maintenance(self):
+        from django.urls import reverse
+        from maintenance.models import MaintenanceRecord
+        self.asset.site = self.foreign_site
+        self.asset.owner_company = self.other
+        self.asset.save()
+        operator = User.objects.create_superuser(username="shared_site_operator", password="Test-4826!")
+        self.client.force_login(operator)
+        data = {
+            "asset_tag": self.asset.asset_tag, "legacy_asset_tag":"", "serial_number":"",
+            "category":str(self.category.pk), "company":str(self.company.pk),
+            "owner_company":str(self.other.pk), "site":str(self.foreign_site.pk),
+            "status":AssetStatus.IN_MAINTENANCE, "property_type":"OWNED", "_save":"Guardar",
+        }
+        for prefix in ("specs", "network", "warranties"):
+            data.update({prefix+"-TOTAL_FORMS":"0", prefix+"-INITIAL_FORMS":"0",
+                         prefix+"-MIN_NUM_FORMS":"0", prefix+"-MAX_NUM_FORMS":"1000"})
+        response = self.client.post(reverse("admin:inventory_asset_change", args=[self.asset.pk]), data)
+        self.assertEqual(response.status_code, 302)
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, AssetStatus.IN_MAINTENANCE)
+        self.assertEqual(self.asset.company, self.company)
+        self.assertEqual(self.asset.owner_company, self.other)
+        self.assertEqual(self.asset.site, self.foreign_site)
+        self.assertEqual(MaintenanceRecord.objects.filter(asset=self.asset).count(), 1)
+        self.assertEqual(self.asset.history.first().history_user, operator)
+
+    def test_shared_site_survives_assignment_maintenance_return_and_closure(self):
+        from maintenance.models import MaintenanceRecord, MaintenanceType, MaintenanceStatus
+        self.asset.site = self.foreign_site
+        self.asset.save()
+        assignment = self.assign()
+        ticket = MaintenanceRecord.objects.create(asset=self.asset, reported_by=self.user,
+                    type=MaintenanceType.CORRECTIVE, description="Prueba")
+        return_assignment(assignment_id=assignment.pk, condition="Recibido", returned_by=self.user)
+        ticket.status = MaintenanceStatus.COMPLETED
+        ticket.save()
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, AssetStatus.AVAILABLE)
+        self.assertEqual(self.asset.site, self.foreign_site)
+        self.assertEqual(self.asset.company, self.company)
+
+    def test_cleanup_keeps_shared_assets_when_merging_same_owner_sites(self):
+        from django.db import transaction
+        from data_imports.management.commands.clean_organizations import Command
+        self.asset.site = self.foreign_site
+        self.asset.save()
+        target = Site.objects.create(company=self.other, name="Destino de la misma compañía propietaria de la sede")
+        with transaction.atomic():
+            Command().move_relation(Asset.objects.filter(pk=self.asset.pk), "site", target)
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.site, target)
+        self.assertEqual(self.asset.company, self.company)
+
+    def test_location_metadata_edits_do_not_revalidate_unchanged_legacy_company(self):
+        from django.urls import reverse
+        # Solo la base temporal: reproducir una ubicación antigua compartida.
+        Employee.objects.filter(pk=self.employee.pk).update(company=self.other)
+        operator=User.objects.create_superuser(username="location_editor",password="Test-4826!")
+        self.client.force_login(operator)
+        response=self.client.post(reverse("admin:organizations_site_change",args=[self.site.pk]),{
+            "name":"Ubicación actualizada", "address":"Dirección sintética", "city":"Ciudad sintética", "status":"ACTIVE", "_save":"Guardar",
+        })
+        self.assertEqual(response.status_code,302)
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.name,"Ubicación actualizada")
+        self.assertEqual(self.site.company_id,self.company.pk)

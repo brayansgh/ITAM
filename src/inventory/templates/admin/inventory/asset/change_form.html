@@ -6,7 +6,7 @@
 <div class="module aligned">
 <h2>Ficha del activo</h2>
 <p><strong>Placa:</strong> {{ asset_record.legacy_asset_tag|default:asset_record.asset_tag }} · <strong>Código único:</strong> {{ asset_record.asset_tag }} · <strong>Serie:</strong> {{ asset_record.serial_number|default:"Sin dato" }}</p>
-<p><strong>Estado:</strong> {{ asset_record.get_status_display }} · <strong>Compañía administradora:</strong> {{ asset_record.company }} · <strong>Propietaria:</strong> {{ asset_record.owner_company|default:"Sin dato" }} · <strong>Sede:</strong> {{ asset_record.site|default:"Sin dato" }}</p>
+<p><strong>Estado:</strong> {{ asset_record.get_status_display }} · <strong>Compañía administradora:</strong> {{ asset_record.company }} · <strong>Propietaria:</strong> {{ asset_record.owner_company|default:"Sin dato" }} · <strong>Ubicación física:</strong> {{ asset_record.site|default:"Sin dato" }}</p>
 <p><strong>Custodio vigente:</strong> {% if asset_timeline.can_assignments %}{{ asset_timeline.custodian|default:"Sin asignación" }}{% else %}Sin permiso para consultar custodia{% endif %}</p>
 <p><a href="{{ asset_audit_url }}">Auditoría técnica de cambios</a></p>
 </div>

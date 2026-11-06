@@ -22,7 +22,7 @@ class Company(BaseModel):
 
 class Site(BaseModel):
     history = HistoricalRecords()
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sites')
+    company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='sites', blank=True, null=True)
     name = models.CharField(max_length=150)
     address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)

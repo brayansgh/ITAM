@@ -22,7 +22,7 @@ conservación de custodia, cierre con otros tickets abiertos y bloqueo de dispon
 manual contradictoria. No usar las versiones antiguas en `/tmp` como fuente de verdad.
 
 En el tercer bloque, los escenarios 04 y 08 pasan a ser regresiones: rechazo de
-nuevas custodias para retirados y coherencia compañía/sede. El estado actual del
+nuevas custodias para retirados y sedes compartidas de activos (política aclarada posteriormente). El estado actual del
 bloque se documenta en la bitácora; no inferir correcciones de casos aún test_gap.
 
 En el cuarto bloque, los casos 11 y 12 pasan a regresiones de ficha/cronología y

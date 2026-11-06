@@ -13,6 +13,9 @@ def validate_company_links(instance, using=None, values=None, lock=False):
         return
     errors = {}
     for field, model in (("site", "Site"), ("area", "Area")):
+        # En activos, la sede es ubicación física compartida entre compañías.
+        if field == "site" and instance._meta.concrete_model._meta.label_lower == "inventory.asset":
+            continue
         related_id = values.get(field)
         if related_id is None:
             continue
@@ -46,10 +49,11 @@ def validate_container_company(instance, using=None, company_id=None):
     company_id = company_id or instance.company_id
     if company_id is None or instance.pk is None:
         return
+    previous = type(instance).objects.using(using).filter(pk=instance.pk).values_list("company_id", flat=True).first()
+    if previous == company_id:
+        return
     field = "site" if instance._meta.model_name == "site" else "area"
     references = [("employees", "Employee")]
-    if field == "site":
-        references.append(("inventory", "Asset"))
     for app, model in references:
         if apps.get_model(app, model).objects.using(using).filter(
             **{field + "_id": instance.pk}

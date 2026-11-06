@@ -17,3 +17,7 @@ __pycache__/
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
+
+# Instrucciones locales y respaldos privados
+/AGENTS.md
+/.private-backups/

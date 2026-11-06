@@ -12,13 +12,14 @@ class CompanyAdmin(StandardHistoryAdmin):
 
 @admin.register(Site)
 class SiteAdmin(StandardHistoryAdmin):
-    list_display = ("name", "company", "city", "status")
-    search_fields = ("name", "city", "company__name")
-    list_filter = ("status", "company")
+    list_display = ("name", "city", "status")
+    fields = ("name", "address", "city", "status")
+    search_fields = ("name", "city")
+    list_filter = ("status",)
 
 
 @admin.register(Area)
 class AreaAdmin(StandardHistoryAdmin):
     list_display = ("name", "company", "status")
     search_fields = ("name", "company__name")
-    list_filter = ("status", "company")
+    list_filter = ("status",)

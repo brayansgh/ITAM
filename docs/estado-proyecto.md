@@ -157,3 +157,123 @@ siguen siendo la fuente de verdad. No autoriza tareas ni cambios adicionales.
 - Pendientes de decisión: unicidad/alcance de placas heredadas y diferenciación entre
   devolución voluntaria y finalización de desvinculación. Las nuevas capacidades de
   software, conciliación y SLAs no se declaran implementadas.
+
+## Cierre protegido de tickets y baja definitiva
+
+Implementación aprobada tras la validación de buenas prácticas:
+
+- Un ticket de baja OPEN/IN_PROGRESS mantiene el activo IN_MAINTENANCE y no asignable.
+  Completar DECOMMISSION exige notas, custodia resuelta y ausencia de otros trabajos
+  abiertos; entonces el activo pasa a DECOMMISSIONED e Inventario → Bajas.
+- Los tickets COMPLETED/CANCELLED son de solo consulta. No admiten edición, reapertura
+  ni eliminación ordinarias, tampoco por superusuario o mediante URLs directas.
+- Los activos DECOMMISSIONED y sus especificaciones/red/garantías quedan bloqueados.
+  Se retiró force_edit; las bajas no pueden forzarse desde el selector manual de estado.
+- Documentos de tickets cerrados: descarga protegida preservada; no añadir, modificar,
+  trasladar ni eliminar. La evidencia se guarda antes del cierre; el formulario rechaza
+  modificar evidencias y cerrar en un mismo envío. Las notas de resolución son obligatorias
+  para baja completada; no se impone un certificado universal por falta de política por motivo.
+- Se serializan guardados/cierres sobre el activo y se verifican referencias persistidas
+  para evitar eliminar anexos mediante FKs cambiadas solo en memoria.
+- Pruebas específicas iniciales: 11, OK. Suite combinada final: **138 pruebas, OK**,
+  54,450 segundos; PostgreSQL temporal `test_itam_closed_lifecycle_final_20261106`,
+  destruido al finalizar. Incluye concurrencia de dos cierres del mismo ticket, rollback,
+  documentos protegidos, consulta de auditoría, anexos y solicitudes directas de Admin.
+- `check`: sin problemas. `makemigrations --check --dry-run`: No changes detected.
+- Dos registros existentes renderizados de solo lectura (activo en baja y ticket cerrado),
+  sin guardar cambios; inicio de sesión HTTP 200. No se hicieron pruebas de navegador real.
+- No se reclasificaron datos antiguos ni se inventaron fechas/evidencias. SQL externo,
+  QuerySet.update y acceso directo al almacenamiento quedan fuera de estos controles.
+- Sin migraciones nuevas, commit ni push. Correcciones excepcionales futuras requieren
+  un flujo explícito; no se agregó ningún mecanismo general de desbloqueo.
+
+## Corrección por sedes físicas compartidas en activos
+
+- El usuario reportó que no podía enviar a mantenimiento un activo existente: el
+  formulario rechazaba la sede por pertenecer a otra compañía. Se confirmó en solo
+  lectura que esa asociación ya estaba guardada.
+- El usuario aclaró expresamente que las sedes físicas pueden compartirse entre
+  compañías. La restricción introducida para activos era un supuesto incorrecto.
+- Se retiró esa restricción en validación de modelos/formularios de activos. Ubicación,
+  administración y propiedad se tratan como dimensiones independientes. Se preserva
+  la política de sede/área de empleados; no se extiende el cambio sin decisión explícita.
+- Etiquetas del formulario distinguen compañía administradora, propietaria y ubicación
+  física; se explica que una sede puede pertenecer a otra compañía.
+- La limpieza de organizaciones mantiene las fusiones dentro de la compañía de las
+  sedes, pero ya no confunde la compañía administradora del activo con la de su ubicación.
+- Pruebas específicas: 28, OK. Incluyen POST real del formulario a mantenimiento,
+  propietario y ubicación de otra compañía, ciclo asignación/reparación/devolución y
+  limpieza sintética de sedes compartidas.
+- Suite combinada: **141 pruebas, OK**, 55,568 segundos, PostgreSQL temporal
+  `test_itam_shared_sites_full_20261106`, destruido al finalizar.
+- `check` sin problemas; `makemigrations --check --dry-run`: No changes detected.
+- Se verificó que el activo indicado pasa la regla corregida sin cambiar compañía,
+  propietaria, sede ni estado. Inicio de sesión HTTP 200. No se guardó la transición
+  de ese activo en producción; el usuario puede repetir su operación en la interfaz.
+- Sin migraciones nuevas, limpieza de datos reales, commit ni push.
+
+## Despliegue de ubicación física sin compañía obligatoria
+
+- El usuario aprobó aplicar la propuesta aislada de ubicación independiente.
+- Respaldo privado PostgreSQL custom validado con pg_restore --list y respaldo de
+  código previo; archivos privados dentro de .private-backups, excluidos de Git.
+- Aplicada organizations.0004_ubicacion_sin_compania: Site.company opcional y PROTECT
+  frente al borrado en cascada. Formulario de ubicaciones sin compañía obligatoria.
+- Se compararon hashes de todas las ubicaciones y de las relaciones/estados de activos
+  antes/después de la migración: sin cambios en registros existentes. No se fusionaron
+  ciudades ni se borraron asociaciones históricas; se conservan como datos legados.
+- 130 pruebas completas en la copia aislada, OK, antes del despliegue. Prueba posterior
+  del código desplegado: ubicación sin compañía compartida por activos de dos compañías,
+  OK, en PostgreSQL temporal test_itam_location_deployed_20261106, destruido al finalizar.
+- Columna company_id nullable y formulario sin campo company verificados en producción,
+  mediante inspección de solo lectura. Inicio de sesión HTTP 200.
+- check sin problemas; migrate --check sin pendientes; makemigrations --check --dry-run:
+  No changes detected. Servicio web iniciado tras interrupción breve autorizada.
+- No se copiaron los ajustes exclusivos de pruebas a producción. Sin commit ni push.
+
+## Corrección de ValidationError en guardados de activos y ubicaciones
+
+- El usuario reportó un 500 al enviar un activo a mantenimiento. Consulta de solo
+  lectura: AVAILABLE, una custodia ACTIVE, cero trabajos abiertos y una baja histórica
+  COMPLETED. La traza saneada confirmó el fallo dentro de la sincronización automática.
+- Causa: resolved_status reinterpretaba la baja histórica al registrar el mantenimiento;
+  la transición a DECOMMISSIONED chocaba con la custodia actual. Ahora solo el cierre
+  explícito del ticket de baja solicita esa transición. Se mantienen las bajas existentes.
+- Guardar metadatos/ubicación con un estado heredado sin cambios no fuerza una reparación
+  de datos. Las transiciones nuevas a disponible/baja siguen validadas.
+- Se corrigió la validación de cambio de compañía de ubicaciones para que no bloquee
+  nombre/dirección/ciudad cuando esa compañía no cambia; reproducción mediante POST.
+- Los ValidationError tardíos de Admin se manejan después del rollback: mensaje
+  «No se guardaron los cambios» y retorno al formulario, en lugar de un error 500.
+  Las validaciones ordinarias siguen mostrándose en sus campos. No se capturan ni
+  silencian excepciones distintas como fallos de base de datos o permisos.
+- Pruebas específicas: 54, OK. Suite combinada final: **147 pruebas, OK**, 57,042 segundos,
+  PostgreSQL temporal test_itam_save_regressions_full_20261106, destruido al finalizar.
+- Las regresiones incluyen contexto equivalente al activo reportado, mantenimiento,
+  recepción/cierre de reparación, edición de ubicación sin devolver y rollback de
+  datos e historial ante error posterior al guardado principal.
+- check sin problemas; makemigrations --check --dry-run: No changes detected.
+- No se modificó el activo real ni se corrigieron datos históricos. Sin nuevas
+  migraciones, commit ni push.
+
+## Acceso explícito a la gestión de tickets
+
+- El listado de Mantenimiento enlazaba el activo en su primera columna; faltaba un
+  acceso evidente al ticket y el enlace automático de Django podía envolver otro
+  enlace HTML. Se añadió columna Ticket con enlace nativo y columna Gestión explícita.
+- Gestionar ticket aparece para registros editables con permiso de modificación;
+  Ver ticket para cerrados o usuarios de consulta. El activo conserva enlace separado.
+- No se otorgan permisos ni se reabren tickets cerrados. El servidor sigue bloqueando
+  cambios en COMPLETED/CANCELLED.
+- Cuatro regresiones específicas, OK: enlaces sin anidación, apertura/guardado real de
+  ticket en proceso, consulta de cerrados y protección de usuarios sin modificación.
+- Suite combinada: **151 pruebas, OK**, 58,817 segundos; PostgreSQL temporal
+  test_itam_ticket_navigation_full_20261106, destruido al finalizar.
+- check sin problemas; makemigrations --check --dry-run: No changes detected.
+- Se renderizó el listado con registros existentes en solo lectura, verificando que
+  Ticket es el acceso al ticket. No se modificaron datos de negocio.
+- Sin migraciones nuevas, commit ni push.
+
+## Exclusión de instrucciones locales
+
+Por solicitud del usuario, AGENTS.md se conserva localmente y se retira del seguimiento del repositorio. .gitignore excluye ese archivo y los respaldos privados. No se reescribe el historial de Git ni se publica el contenido local actualizado de AGENTS.md.
