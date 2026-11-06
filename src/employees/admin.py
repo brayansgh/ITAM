@@ -1,22 +1,23 @@
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
-from django.utils import timezone
 from django.utils.html import format_html
-from django.db.models import Q
+
 from simple_history.admin import SimpleHistoryAdmin
 
-from .models import Employee, EmployeeStatus, RetiredEmployee
+from assignments.forms import OffboardingForm, OffboardingItemFormSet
 from assignments.models import (
     Assignment,
     AssignmentStatus,
     OffboardingRecord,
     OffboardingRecordItem,
 )
-from assignments.forms import OffboardingForm, OffboardingItemFormSet
-from inventory.models import AssetStatus
+from assignments.services import return_assignment
+
+from .models import Employee, EmployeeStatus, RetiredEmployee
 
 
 @admin.register(Employee)
@@ -37,14 +38,13 @@ class EmployeeAdmin(SimpleHistoryAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # Permitir consultar el historial de cualquier empleado,
-        # incluso si está retirado y no tiene activos pendientes.
+
         if request.resolver_match.url_name in (
             "employees_employee_history",
             "employees_employee_simple_history",
         ):
             return qs
-        # Filtro normal de la lista de empleados.
+
         return qs.filter(
             ~Q(status=EmployeeStatus.RETIRO)
             | Q(assignments__status=AssignmentStatus.ACTIVE)
@@ -119,12 +119,14 @@ class EmployeeAdmin(SimpleHistoryAdmin):
 
         if request.method == "POST":
             form = OffboardingForm(request.POST)
+
             formset = OffboardingItemFormSet(
                 request.POST,
                 prefix="items",
             )
 
             if form.is_valid() and formset.is_valid():
+
                 selected_forms = [
                     item_form
                     for item_form in formset
@@ -136,6 +138,7 @@ class EmployeeAdmin(SimpleHistoryAdmin):
                         request,
                         "Debes seleccionar al menos un activo para recibir.",
                     )
+
                 else:
                     selected_ids = [
                         item_form.cleaned_data["assignment_id"]
@@ -144,14 +147,15 @@ class EmployeeAdmin(SimpleHistoryAdmin):
 
                     try:
                         with transaction.atomic():
-                            # Bloqueamos las asignaciones para evitar
-                            # procesar una devolución simultánea.
+
                             locked_assignments = list(
-                                Assignment.objects.select_for_update().filter(
+                                Assignment.objects.select_for_update()
+                                .filter(
                                     pk__in=selected_ids,
                                     employee=employee,
                                     status=AssignmentStatus.ACTIVE,
-                                ).select_related("asset")
+                                )
+                                .select_related("asset")
                             )
 
                             if len(locked_assignments) != len(selected_ids):
@@ -173,8 +177,11 @@ class EmployeeAdmin(SimpleHistoryAdmin):
 
                             for assignment in locked_assignments:
                                 item_form = forms_by_id[assignment.pk]
+
                                 condition = item_form.cleaned_data["condition"]
-                                observations = item_form.cleaned_data["observations"]
+                                observations = item_form.cleaned_data[
+                                    "observations"
+                                ]
 
                                 OffboardingRecordItem.objects.create(
                                     offboarding_record=record,
@@ -183,34 +190,26 @@ class EmployeeAdmin(SimpleHistoryAdmin):
                                     observations=observations,
                                 )
 
-                                assignment.status = AssignmentStatus.RETURNED
-                                assignment.returned_at = timezone.now()
-                                assignment.return_condition = condition
-                                assignment.save(
-                                    update_fields=[
-                                        "status",
-                                        "returned_at",
-                                        "return_condition",
-                                        "updated_at",
-                                    ]
+                                return_assignment(
+                                    assignment_id=assignment.pk,
+                                    condition=condition,
                                 )
 
-                                asset = assignment.asset
-                                asset.status = AssetStatus.AVAILABLE
-                                asset.save(
-                                    update_fields=["status", "updated_at"]
-                                )
-
-                            from inventory.offboarding_pdf import generate_and_save_offboarding_pdf
+                            from inventory.offboarding_pdf import (
+                                generate_and_save_offboarding_pdf,
+                            )
 
                             try:
-                                return generate_and_save_offboarding_pdf(record)
+                                return generate_and_save_offboarding_pdf(
+                                    record
+                                )
 
                             except Exception as error:
                                 messages.error(
                                     request,
-                                    f"La devolución se registró, pero ocurrió un error "
-                                    f"al generar el PDF: {error}",
+                                    "La devolución se registró, "
+                                    f"pero ocurrió un error al generar "
+                                    f"el PDF: {error}",
                                 )
 
                                 return redirect(
@@ -221,10 +220,11 @@ class EmployeeAdmin(SimpleHistoryAdmin):
                                 )
 
                     except ValidationError as error:
-                        messages.error(request, error.message)
+                        messages.error(request, str(error))
 
         else:
             form = OffboardingForm()
+
             formset = OffboardingItemFormSet(
                 initial=[
                     {"assignment_id": assignment.pk}
@@ -234,8 +234,14 @@ class EmployeeAdmin(SimpleHistoryAdmin):
             )
 
         rows = [
-            {"assignment": assignment, "form": item_form}
-            for assignment, item_form in zip(assignments, formset.forms)
+            {
+                "assignment": assignment,
+                "form": item_form,
+            }
+            for assignment, item_form in zip(
+                assignments,
+                formset.forms,
+            )
         ]
 
         context = {
@@ -245,7 +251,10 @@ class EmployeeAdmin(SimpleHistoryAdmin):
             "form": form,
             "formset": formset,
             "rows": rows,
-            "title": f"Devolución de activos: {employee.full_name}",
+            "title": (
+                f"Devolución de activos: "
+                f"{employee.full_name}"
+            ),
         }
 
         return render(
