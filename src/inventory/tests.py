@@ -56,8 +56,8 @@ class AssetListTests(TestCase):
         self.assertEqual(self.model_admin.assigned_employee(asset), "Sin asignación")
 
     def test_decommissioned_assets_remain_excluded(self):
-        self.asset.status = AssetStatus.DECOMMISSIONED
-        self.asset.save()
+        from core.testing import complete_decommission
+        complete_decommission(self.asset)
         self.assertFalse(self.model_admin.get_queryset(self.request).filter(pk=self.asset.pk).exists())
 
 
@@ -196,8 +196,8 @@ class AssetCardTests(TestCase):
 
     def test_decommissioned_card_and_links_use_correct_proxy(self):
         from inventory.navigation import asset_link
-        self.asset.status = AssetStatus.DECOMMISSIONED
-        self.asset.save()
+        from core.testing import complete_decommission
+        complete_decommission(self.asset)
         response = self.client.get(self.url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Ficha del activo")

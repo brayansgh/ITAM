@@ -35,21 +35,29 @@ class MaintenanceRecord(BaseModel):
 
     def clean(self):
         super().clean()
-        from django.core.exceptions import ValidationError
-        if self.pk:
-            previous = type(self).objects.filter(pk=self.pk).values_list("asset_id", flat=True).first()
-            if previous is not None and previous != self.asset_id:
-                raise ValidationError({"asset": "No se puede trasladar un ticket existente a otro activo."})
+        from django.db import router
+        from .closure import validate_ticket
+        using = self._state.db or router.db_for_write(type(self), instance=self)
+        previous = type(self).objects.using(using).filter(pk=self.pk).first()
+        validate_ticket(self, using, previous)
 
     def save(self, *args, **kwargs):
-        from django.core.exceptions import ValidationError
         from django.db import router, transaction
+        from .closure import validate_ticket
         using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
         with transaction.atomic(using=using):
-            Asset.objects.using(using).select_for_update().get(pk=self.asset_id)
-            previous = type(self).objects.using(using).filter(pk=self.pk).values_list("asset_id", flat=True).first()
-            if previous is not None and previous != self.asset_id:
-                raise ValidationError({"asset": "No se puede trasladar un ticket existente a otro activo."})
+            asset = Asset.objects.using(using).select_for_update().get(pk=self.asset_id)
+            previous = type(self).objects.using(using).filter(pk=self.pk).first()
+            # Validar lo que realmente se persistirá en guardados parciales.
+            candidate = self
+            fields = kwargs.get("update_fields")
+            if previous is not None and fields is not None:
+                from copy import copy
+                candidate = copy(previous)
+                for field in self._meta.concrete_fields:
+                    if field.name in fields or field.attname in fields:
+                        setattr(candidate, field.attname, getattr(self, field.attname))
+            validate_ticket(candidate, using, previous, asset)
             return super().save(*args, **kwargs)
 
     def __str__(self):
@@ -75,6 +83,25 @@ class MaintenanceDocument(models.Model):
         verbose_name="Acta / Evidencia",
         help_text="⚠️ ATENCIÓN: Solo se admite formato PDF. (Máximo 3 archivos)"
     )
+
+    def save(self, *args, **kwargs):
+        from django.db import router, transaction
+        from django.core.exceptions import ValidationError
+        from .closure import CLOSED_STATUSES
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        with transaction.atomic(using=using):
+            record = MaintenanceRecord.objects.using(using).get(pk=self.maintenance_id)
+            asset = Asset.objects.using(using).select_for_update().get(pk=record.asset_id)
+            from inventory.models import AssetStatus
+            if asset.status == AssetStatus.DECOMMISSIONED:
+                raise ValidationError("Los documentos de un activo dado de baja son de solo consulta.")
+            record.refresh_from_db(using=using)
+            previous = type(self).objects.using(using).filter(pk=self.pk).first()
+            if previous and previous.maintenance_id != self.maintenance_id:
+                raise ValidationError("No se puede trasladar un documento a otro ticket.")
+            if record.status in CLOSED_STATUSES:
+                raise ValidationError("Los documentos de un ticket cerrado son de solo consulta.")
+            return super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = "Documento Adjunto"

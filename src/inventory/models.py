@@ -85,7 +85,10 @@ class Asset(BaseModel):
         from maintenance.services import validate_asset_status
         using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
         with transaction.atomic(using=using):
-            Asset.objects.using(using).select_for_update().filter(pk=self.pk).first()
+            previous = Asset.objects.using(using).select_for_update().filter(pk=self.pk).first()
+            if previous is not None and previous.status == AssetStatus.DECOMMISSIONED:
+                from django.core.exceptions import ValidationError
+                raise ValidationError("El activo dado de baja es de solo consulta.")
             fields = kwargs.get("update_fields")
             if fields is None or "status" in fields:
                 validate_asset_status(self, using)
@@ -98,6 +101,10 @@ class Asset(BaseModel):
 class AssetSpecs(BaseModel):
     history = HistoricalRecords()
 
+    def save(self, *args, **kwargs):
+        from .locking import save_asset_attachment
+        return save_asset_attachment(self, super().save, *args, **kwargs)
+
     def __str__(self):
         return f"Especificaciones de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
     asset = models.OneToOneField(Asset, on_delete=models.CASCADE, related_name='specs')
@@ -108,6 +115,10 @@ class AssetSpecs(BaseModel):
 
 class AssetNetwork(BaseModel):
     history = HistoricalRecords()
+
+    def save(self, *args, **kwargs):
+        from .locking import save_asset_attachment
+        return save_asset_attachment(self, super().save, *args, **kwargs)
 
     def __str__(self):
         return f"Red de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
@@ -120,6 +131,10 @@ class AssetNetwork(BaseModel):
 
 class AssetWarranty(BaseModel):
     history = HistoricalRecords()
+
+    def save(self, *args, **kwargs):
+        from .locking import save_asset_attachment
+        return save_asset_attachment(self, super().save, *args, **kwargs)
 
     def __str__(self):
         return f"Garantía de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"

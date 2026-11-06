@@ -129,7 +129,7 @@ class MaintenanceTransitionTests(TestCase):
         self.assertEqual(self.status(), AssetStatus.AVAILABLE)
 
     def test_ticket_closure_does_not_reactivate_terminal_states(self):
-        for state in (AssetStatus.DECOMMISSIONED, AssetStatus.RETIRED, AssetStatus.LOST, AssetStatus.IN_TRANSIT):
+        for state in (AssetStatus.RETIRED, AssetStatus.LOST, AssetStatus.IN_TRANSIT):
             with self.subTest(state=state):
                 self.asset.status = state
                 self.asset.save()
@@ -161,7 +161,7 @@ class MaintenanceTransitionTests(TestCase):
         self.assign()
         before = MaintenanceRecord.history.count()
         with self.assertRaises(ValidationError):
-            self.ticket(type=MaintenanceType.DECOMMISSION)
+            self.ticket(type=MaintenanceType.DECOMMISSION, status=MaintenanceStatus.COMPLETED, resolution_notes="Baja sintética")
         self.assertFalse(MaintenanceRecord.objects.exists())
         self.assertEqual(MaintenanceRecord.history.count(), before)
         self.assertEqual(self.status(), AssetStatus.ASSIGNED)
@@ -197,14 +197,15 @@ class MaintenanceTransitionTests(TestCase):
         self.ticket(type=MaintenanceType.DECOMMISSION, status=MaintenanceStatus.CANCELLED)
         self.assertEqual(self.status(), AssetStatus.AVAILABLE)
 
-    def test_reopening_ticket_makes_asset_unavailable_again(self):
+    def test_closed_ticket_cannot_be_reopened(self):
         ticket = self.ticket()
         ticket.status = MaintenanceStatus.COMPLETED
         ticket.save()
         self.assertEqual(self.status(), AssetStatus.AVAILABLE)
         ticket.status = MaintenanceStatus.IN_PROGRESS
-        ticket.save()
-        self.assertEqual(self.status(), AssetStatus.IN_MAINTENANCE)
+        with self.assertRaises(ValidationError):
+            ticket.save()
+        self.assertEqual(self.status(), AssetStatus.AVAILABLE)
 
 
 class ConcurrentMaintenanceTests(TransactionTestCase):

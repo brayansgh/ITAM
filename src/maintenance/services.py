@@ -10,16 +10,12 @@ PRESERVED_STATUSES = (AssetStatus.DECOMMISSIONED, AssetStatus.RETIRED, AssetStat
 def open_repairs(asset, using):
     return MaintenanceRecord.objects.using(using).filter(
         asset_id=asset.pk, status__in=OPEN_STATUSES,
-    ).exclude(type=MaintenanceType.DECOMMISSION)
+    )
 
 
 def resolved_status(asset, using):
     if asset.status in PRESERVED_STATUSES:
         return asset.status
-    if MaintenanceRecord.objects.using(using).filter(
-        asset_id=asset.pk, type=MaintenanceType.DECOMMISSION,
-    ).exclude(status=MaintenanceStatus.CANCELLED).exists():
-        return AssetStatus.DECOMMISSIONED
     if open_repairs(asset, using).exists():
         return AssetStatus.IN_MAINTENANCE
     if asset.assignments.using(using).filter(status="ACTIVE").exists():
@@ -30,6 +26,14 @@ def resolved_status(asset, using):
 def validate_asset_status(asset, using):
     if not asset.pk:
         return
+    if asset.status == AssetStatus.DECOMMISSIONED and not MaintenanceRecord.objects.using(using).filter(
+        asset_id=asset.pk, type=MaintenanceType.DECOMMISSION, status=MaintenanceStatus.COMPLETED,
+    ).exists():
+        raise ValidationError({"status": "Completa el ticket de baja; no cambies este estado manualmente."})
+    previous_status = type(asset).objects.using(using).filter(pk=asset.pk).values_list("status", flat=True).first()
+    # No bloquear cambios de ubicación/metadatos por un estado heredado sin cambios.
+    if previous_status == asset.status:
+        return
     active = asset.assignments.using(using).filter(status="ACTIVE").exists()
     if asset.status in (AssetStatus.AVAILABLE, AssetStatus.DECOMMISSIONED) and active:
         raise ValidationError({"status": "Registra primero la devolución de los activos en custodia."})
@@ -37,10 +41,10 @@ def validate_asset_status(asset, using):
         raise ValidationError({"status": "El activo tiene mantenimientos abiertos; cierra sus tickets primero."})
 
 
-def synchronize_ticket_asset(asset_id, actor, using):
+def synchronize_ticket_asset(asset_id, actor, using, completed_decommission=False):
     from inventory.models import Asset
     asset = Asset.objects.using(using).select_for_update().get(pk=asset_id)
-    status = resolved_status(asset, using)
+    status = AssetStatus.DECOMMISSIONED if completed_decommission else resolved_status(asset, using)
     if status != asset.status:
         asset.status = status
         asset._history_user = actor

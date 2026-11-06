@@ -308,8 +308,8 @@ class CrossModuleAuditTests(TestCase):
         from assignments.models import EmployeeAssetSummary
         self.employee.status = EmployeeStatus.RETIRO
         self.employee.save()
-        self.asset.status = AssetStatus.DECOMMISSIONED
-        self.asset.save()
+        from core.testing import complete_decommission
+        complete_decommission(self.asset)
         for model, object_id in [
             (DecommissionedAsset, self.asset.pk),
             (EmployeeAssetSummary, self.employee.pk),
@@ -320,3 +320,23 @@ class CrossModuleAuditTests(TestCase):
                 response = self.client.get(url, follow=True)
                 self.assertEqual(response.status_code, 200)
                 self.assertTemplateUsed(response, "admin/core/audit_history.html")
+
+
+class AdminValidationRollbackTests(TestCase):
+    def test_late_validation_rolls_back_and_shows_error_instead_of_500(self):
+        from unittest.mock import patch
+        from django.core.exceptions import ValidationError
+        user=User.objects.create_superuser(username="validation_operator",password="Test-4826!")
+        category=Category.objects.create(name="Nombre previo")
+        self.client.force_login(user)
+        model_admin=admin.site._registry[Category]
+        before=category.history.count()
+        with patch.object(model_admin,"save_related",side_effect=ValidationError("Conflicto de validación sintético")):
+            response=self.client.post(reverse("admin:inventory_category_change",args=[category.pk]),
+                    {"name":"Cambio que debe revertirse","description":"Prueba","_save":"Guardar"},follow=True)
+        self.assertEqual(response.status_code,200)
+        self.assertContains(response,"No se guardaron los cambios")
+        self.assertContains(response,"Conflicto de validación sintético")
+        category.refresh_from_db()
+        self.assertEqual(category.name,"Nombre previo")
+        self.assertEqual(category.history.count(),before)

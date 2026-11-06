@@ -79,14 +79,14 @@ class FlowDiagnostic(TestCase):
         response=self.client.post(reverse('admin:employees_employee_process_offboarding',args=[self.employee.pk]),self.offboard_payload(a))
         self.assertEqual(response.status_code,200)
         self.employee.refresh_from_db();self.assertEqual(self.employee.status,EmployeeStatus.ACTIVE)
-    def test_regression_08_cross_company_site_is_rejected(self):
-        from django.core.exceptions import ValidationError
+    def test_regression_08_shared_physical_site_is_allowed(self):
         company=Company.objects.create(name='Otra empresa sintética',code='OTHER')
-        site=Site.objects.create(company=company,name='Otra sede')
+        site=Site.objects.create(company=company,name='Sede compartida')
         self.asset.site=site
-        with self.assertRaises(ValidationError): self.asset.full_clean()
-        with self.assertRaises(ValidationError): self.asset.save()
-        self.asset.refresh_from_db();self.assertIsNone(self.asset.site_id)
+        self.asset.full_clean();self.asset.save()
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.site_id,site.pk)
+        self.assertEqual(self.asset.company_id,self.company.pk)
     def test_gap_09_legacy_identifier_is_not_unique(self):
         other=Asset.objects.create(company=self.company,category=self.category,asset_tag='DIAG-OTHER',legacy_asset_tag='LEG-1')
         self.assertEqual(other.legacy_asset_tag,self.asset.legacy_asset_tag)
