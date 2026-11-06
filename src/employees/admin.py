@@ -1,12 +1,14 @@
+from core.admin_audit import StandardHistoryAdmin
 from django.contrib import admin, messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from simple_history.admin import SimpleHistoryAdmin
+
+from accounts.models import Role
 
 from assignments.forms import OffboardingForm, OffboardingItemFormSet
 from assignments.models import (
@@ -21,7 +23,7 @@ from .models import Employee, EmployeeStatus, RetiredEmployee
 
 
 @admin.register(Employee)
-class EmployeeAdmin(SimpleHistoryAdmin):
+class EmployeeAdmin(StandardHistoryAdmin):
 
     search_fields = ("full_name", "document_number")
 
@@ -35,6 +37,23 @@ class EmployeeAdmin(SimpleHistoryAdmin):
         "view_assigned_assets",
         "process_offboarding",
     )
+
+    def can_process_offboarding(self, request, obj=None):
+        user = request.user
+        if not (user.is_authenticated and user.is_active and user.is_staff):
+            return False
+        if user.is_superuser:
+            return True
+        return (
+            user.role in (Role.ADMINISTRATOR, Role.TECHNOLOGY)
+            and self.has_change_permission(request, obj)
+        )
+
+    def get_list_display(self, request):
+        columns = super().get_list_display(request)
+        if not self.can_process_offboarding(request):
+            return tuple(column for column in columns if column != "process_offboarding")
+        return columns
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -103,7 +122,11 @@ class EmployeeAdmin(SimpleHistoryAdmin):
         return custom_urls + urls
 
     def process_offboarding_view(self, request, object_id):
-        employee = get_object_or_404(Employee, pk=object_id)
+        if not self.can_process_offboarding(request):
+            raise PermissionDenied
+        employee = get_object_or_404(self.get_queryset(request), pk=object_id)
+        if not self.can_process_offboarding(request, employee):
+            raise PermissionDenied
 
         assignments = list(
             Assignment.objects.filter(
@@ -149,13 +172,14 @@ class EmployeeAdmin(SimpleHistoryAdmin):
                         with transaction.atomic():
 
                             locked_assignments = list(
-                                Assignment.objects.select_for_update()
+                                Assignment.objects.select_for_update(of=("asset",))
                                 .filter(
                                     pk__in=selected_ids,
                                     employee=employee,
                                     status=AssignmentStatus.ACTIVE,
                                 )
                                 .select_related("asset")
+                                .order_by("asset_id")
                             )
 
                             if len(locked_assignments) != len(selected_ids):
@@ -193,6 +217,7 @@ class EmployeeAdmin(SimpleHistoryAdmin):
                                 return_assignment(
                                     assignment_id=assignment.pk,
                                     condition=condition,
+                                    returned_by=request.user,
                                 )
 
                             from inventory.offboarding_pdf import (

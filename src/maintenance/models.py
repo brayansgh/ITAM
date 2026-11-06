@@ -33,6 +33,25 @@ class MaintenanceRecord(BaseModel):
         verbose_name_plural = "Mantenimientos y Bajas"
         ordering = ['-created_at']
 
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if self.pk:
+            previous = type(self).objects.filter(pk=self.pk).values_list("asset_id", flat=True).first()
+            if previous is not None and previous != self.asset_id:
+                raise ValidationError({"asset": "No se puede trasladar un ticket existente a otro activo."})
+
+    def save(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
+        from django.db import router, transaction
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        with transaction.atomic(using=using):
+            Asset.objects.using(using).select_for_update().get(pk=self.asset_id)
+            previous = type(self).objects.using(using).filter(pk=self.pk).values_list("asset_id", flat=True).first()
+            if previous is not None and previous != self.asset_id:
+                raise ValidationError({"asset": "No se puede trasladar un ticket existente a otro activo."})
+            return super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.get_type_display()} - {self.asset.asset_tag}"
 
@@ -48,6 +67,7 @@ from django.contrib.auth import get_user_model
 from inventory.models import Asset
 
 class MaintenanceDocument(models.Model):
+    history = HistoricalRecords()
     maintenance = models.ForeignKey(MaintenanceRecord, on_delete=models.CASCADE, related_name="documents")
     document = models.FileField(
         upload_to="maintenance_docs/%Y/%m/",

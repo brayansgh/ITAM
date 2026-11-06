@@ -1,0 +1,29 @@
+{% extends "admin/object_history.html" %}
+{% load tz %}
+{% block content %}
+<div id="content-main">
+  <div class="module">
+    <h2>Historial de datos</h2>
+    <p>Zona horaria: {{ audit_timezone }}. Orden: del más reciente al más antiguo.</p>
+    <p>Versiones registradas: {{ audit_counts.total }} · Creaciones: {{ audit_counts.created }} · Modificaciones: {{ audit_counts.modified }} · Eliminaciones: {{ audit_counts.deleted }}</p>
+    <p>Los conteos corresponden a versiones guardadas de este registro; no representan usuarios únicos ni operaciones de negocio. Los eventos administrativos y los registros relacionados se cuentan aparte.</p>
+    {% include "admin/core/audit_rows.html" with rows=audit_rows %}
+    <p class="paginator">{% if audit_page.has_previous %}<a href="?page={{ audit_page.previous_page_number }}&amp;events_page={{ admin_events.number }}">Anterior</a>{% endif %} Página {{ audit_page.number }} de {{ audit_page.paginator.num_pages }} {% if audit_page.has_next %}<a href="?page={{ audit_page.next_page_number }}&amp;events_page={{ admin_events.number }}">Siguiente</a>{% endif %}</p>
+  </div>
+  {% if related_count %}<div class="module">
+    <h2>Registros relacionados</h2>
+    <p>Versiones relacionadas: {{ related_count }}. Se muestran como máximo las 50 más recientes; no se suman al historial del registro principal.</p>
+    {% include "admin/core/audit_rows.html" with rows=related_rows related=True %}
+  </div>{% endif %}
+  <div class="module">
+    <h2>Eventos administrativos</h2>
+    <p>Eventos: {{ admin_events.paginator.count }}. Corresponden a acciones en Admin; pueden referirse a operaciones que también generaron versiones de datos. No se suman ambos conteos.</p>
+    <p>Los registros antiguos conservan el detalle disponible.</p>
+    <table style="width:100%"><thead><tr><th>Fecha / Hora</th><th>Responsable</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>
+    {% for event in admin_events %}<tr><td>{{ event.action_time|localtime|date:"d/m/Y H:i:s" }}</td><td>{{ event.user.get_username }}</td><td>{% if event.is_addition %}Creación{% elif event.is_deletion %}Eliminación{% else %}Modificación{% endif %}</td><td>{{ event.get_change_message }}</td></tr>
+    {% empty %}<tr><td colspan="4">No hay eventos administrativos registrados.</td></tr>{% endfor %}
+    </tbody></table>
+    <p class="paginator">{% if admin_events.has_previous %}<a href="?events_page={{ admin_events.previous_page_number }}&amp;page={{ audit_page.number }}">Anterior</a>{% endif %} Página {{ admin_events.number }} de {{ admin_events.paginator.num_pages }} {% if admin_events.has_next %}<a href="?events_page={{ admin_events.next_page_number }}&amp;page={{ audit_page.number }}">Siguiente</a>{% endif %}</p>
+  </div>
+</div>
+{% endblock %}

@@ -1,3 +1,5 @@
+from inventory.navigation import AssetLinkAdminMixin
+from core.admin_audit import StandardHistoryAdmin
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
@@ -78,7 +80,7 @@ def generate_pdf_action(modeladmin, request, queryset):
 
 
 @admin.register(Assignment)
-class AssignmentAdmin(admin.ModelAdmin):
+class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
 
     exclude = ("signed_act_pdf",)
 
@@ -177,6 +179,10 @@ class AssignmentAdmin(admin.ModelAdmin):
                     )
                 )
 
+        if db_field.name == "employee" and not getattr(request, "current_obj", None):
+            from employees.models import EmployeeStatus
+            kwargs["queryset"] = db_field.related_model.objects.exclude(status=EmployeeStatus.RETIRO)
+
         return super().formfield_for_foreignkey(
             db_field,
             request,
@@ -246,7 +252,7 @@ class AssignmentAdmin(admin.ModelAdmin):
 
 # NUEVA VISTA: Panel consolidado por Usuario
 @admin.register(EmployeeAssetSummary)
-class EmployeeAssetSummaryAdmin(admin.ModelAdmin):
+class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
 
     list_display = (
         "document_number",
@@ -419,7 +425,7 @@ class OffboardingRecordItemInline(admin.TabularInline):
 
 
 @admin.register(OffboardingRecord)
-class OffboardingRecordAdmin(admin.ModelAdmin):
+class OffboardingRecordAdmin(StandardHistoryAdmin):
 
     list_display = (
         "employee",
@@ -457,6 +463,7 @@ class OffboardingRecordAdmin(admin.ModelAdmin):
     )
 
     inlines = [OffboardingRecordItemInline]
+    audit_related_models = ((OffboardingRecordItem, "offboarding_record"),)
 
     def has_add_permission(self, request):
         return False

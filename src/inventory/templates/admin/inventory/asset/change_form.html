@@ -1,0 +1,27 @@
+{% extends "admin/change_form.html" %}
+{% load tz %}
+{% block form_top %}
+{{ block.super }}
+{% if asset_record %}
+<div class="module aligned">
+<h2>Ficha del activo</h2>
+<p><strong>Placa:</strong> {{ asset_record.legacy_asset_tag|default:asset_record.asset_tag }} · <strong>Código único:</strong> {{ asset_record.asset_tag }} · <strong>Serie:</strong> {{ asset_record.serial_number|default:"Sin dato" }}</p>
+<p><strong>Estado:</strong> {{ asset_record.get_status_display }} · <strong>Compañía administradora:</strong> {{ asset_record.company }} · <strong>Propietaria:</strong> {{ asset_record.owner_company|default:"Sin dato" }} · <strong>Sede:</strong> {{ asset_record.site|default:"Sin dato" }}</p>
+<p><strong>Custodio vigente:</strong> {% if asset_timeline.can_assignments %}{{ asset_timeline.custodian|default:"Sin asignación" }}{% else %}Sin permiso para consultar custodia{% endif %}</p>
+<p><a href="{{ asset_audit_url }}">Auditoría técnica de cambios</a></p>
+</div>
+<div class="module">
+<h2>Cronología operativa</h2>
+<p>Fecha y hora: {% get_current_timezone as current_timezone %}{{ current_timezone }}. La fecha de mantenimiento corresponde al registro del ticket; su estado mostrado es el actual. No se reconstruyen fechas de cierre faltantes.</p>
+{% if not asset_timeline.can_assignments %}<p>No tienes permiso para consultar asignaciones.</p>{% endif %}
+{% if not asset_timeline.can_maintenance %}<p>No tienes permiso para consultar mantenimientos.</p>{% endif %}
+{% if asset_timeline.missing_return_dates %}<p>Hay {{ asset_timeline.missing_return_dates }} devoluciones sin fecha registrada; no se inventan eventos para ellas.</p>{% endif %}
+<p>Eventos visibles: {{ asset_timeline.page.paginator.count }}. Cada asignación, devolución y registro de ticket se cuenta por separado.</p>
+<table style="width:100%"><thead><tr><th>Fecha / Hora</th><th>Evento</th><th>Responsable registrado</th><th>Detalle</th><th>Origen</th></tr></thead><tbody>
+{% for event in asset_timeline.rows %}<tr><td>{{ event.event_date|localtime|date:"d/m/Y H:i:s" }}</td><td>{{ event.action }}</td><td>{{ event.person }}</td><td>{{ event.detail }}</td><td><a href="{{ event.url }}">Ver registro</a></td></tr>
+{% empty %}<tr><td colspan="5">Sin eventos operativos visibles.</td></tr>{% endfor %}
+</tbody></table>
+<p class="paginator">{% if asset_timeline.page.has_previous %}<a href="?timeline_page={{ asset_timeline.page.previous_page_number }}{% if request.GET.force_edit == '1' %}&amp;force_edit=1{% endif %}">Anterior</a>{% endif %} Página {{ asset_timeline.page.number }} de {{ asset_timeline.page.paginator.num_pages }} {% if asset_timeline.page.has_next %}<a href="?timeline_page={{ asset_timeline.page.next_page_number }}{% if request.GET.force_edit == '1' %}&amp;force_edit=1{% endif %}">Siguiente</a>{% endif %}</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,3 +1,5 @@
+from inventory.navigation import AssetLinkAdminMixin
+from core.admin_audit import StandardHistoryAdmin
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.widgets import AdminFileWidget
@@ -5,15 +7,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.urls import path, reverse
-from simple_history.admin import SimpleHistoryAdmin
-from dataclasses import dataclass
 from .models import MaintenanceRecord, MaintenanceDocument, MaintenanceStatus, MaintenanceType
-
-@dataclass
-class CustomChange:
-    field: str
-    old: str
-    new: str
 
 class PrivateDocumentWidget(AdminFileWidget):
     template_name = "admin/maintenance/private_file_input.html"
@@ -41,11 +35,12 @@ class MaintenanceDocumentInline(admin.TabularInline):
     max_num = 3
 
 @admin.register(MaintenanceRecord)
-class MaintenanceRecordAdmin(SimpleHistoryAdmin):
+class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
     list_display = ('asset', 'type', 'status', 'reported_by')
     list_filter = ('type', 'status')
     search_fields = ('asset__asset_tag', 'description', 'provider')
     inlines = [MaintenanceDocumentInline]
+    audit_related_models = ((MaintenanceDocument, "maintenance"),)
 
     def get_urls(self):
         return [
@@ -65,39 +60,3 @@ class MaintenanceRecordAdmin(SimpleHistoryAdmin):
         if not document.document:
             raise Http404("Documento no disponible")
         return FileResponse(document.document.open("rb"), content_type="application/pdf")
-
-    def history_view(self, request, object_id, extra_context=None):
-        response = super().history_view(request, object_id, extra_context=extra_context)
-        
-        if hasattr(response, 'context_data') and 'action_list' in response.context_data:
-            STATUS_MAP = dict(MaintenanceStatus.choices)
-            TYPE_MAP = dict(MaintenanceType.choices)
-            
-            FIELD_MAP = {
-                'status': 'Estado del Ticket',
-                'type': 'Tipo de Evento',
-                'description': 'Descripción',
-                'provider': 'Proveedor',
-                'cost': 'Costo',
-                'resolution_notes': 'Notas de Resolución',
-            }
-
-            for action in response.context_data['action_list']:
-                if hasattr(action, 'delta') and action.delta:
-                    translated_changes = []
-                    for change in action.delta.changes:
-                        field_label = FIELD_MAP.get(change.field, change.field)
-                        old_val = change.old
-                        new_val = change.new
-                        
-                        if change.field == 'status':
-                            old_val = STATUS_MAP.get(old_val, old_val)
-                            new_val = STATUS_MAP.get(new_val, new_val)
-                        elif change.field == 'type':
-                            old_val = TYPE_MAP.get(old_val, old_val)
-                            new_val = TYPE_MAP.get(new_val, new_val)
-                            
-                        translated_changes.append(CustomChange(field=field_label, old=old_val, new=new_val))
-                    
-                    action.delta.changes = translated_changes
-        return response

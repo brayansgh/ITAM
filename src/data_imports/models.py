@@ -1,3 +1,4 @@
+from simple_history.models import HistoricalRecords
 from django.db import models
 from core.models import BaseModel
 
@@ -8,6 +9,7 @@ class ImportStatus(models.TextChoices):
     REJECTED = 'REJECTED', 'Descartado'
 
 class StagingAsset(BaseModel):
+    history = HistoricalRecords()
     sheet_name = models.CharField(max_length=50)
     row_number = models.IntegerField()
     employee_name = models.CharField(max_length=255, blank=True, null=True)

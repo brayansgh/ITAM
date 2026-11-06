@@ -4,6 +4,7 @@ from core.models import BaseModel
 from organizations.models import Company, Site
 
 class Category(BaseModel):
+    history = HistoricalRecords()
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
 
@@ -11,12 +12,14 @@ class Category(BaseModel):
         return self.name
 
 class Brand(BaseModel):
+    history = HistoricalRecords()
     name = models.CharField(max_length=100, unique=True)
 
     def __str__(self):
         return self.name
 
 class ModelAsset(BaseModel):
+    history = HistoricalRecords()
     brand = models.ForeignKey(Brand, on_delete=models.PROTECT, related_name='models')
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='models', null=True, blank=True)
     name = models.CharField(max_length=100)
@@ -69,10 +72,31 @@ class Asset(BaseModel):
             )
         ]
 
+    def clean(self):
+        super().clean()
+        from organizations.validation import validate_company_links
+        validate_company_links(self)
+        from django.db import router
+        from maintenance.services import validate_asset_status
+        validate_asset_status(self, self._state.db or router.db_for_write(type(self), instance=self))
+
+    def save(self, *args, **kwargs):
+        from django.db import router, transaction
+        from maintenance.services import validate_asset_status
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        with transaction.atomic(using=using):
+            Asset.objects.using(using).select_for_update().filter(pk=self.pk).first()
+            fields = kwargs.get("update_fields")
+            if fields is None or "status" in fields:
+                validate_asset_status(self, using)
+            from organizations.validation import save_with_company_links
+            return save_with_company_links(self, super().save, *args, **kwargs)
+
     def __str__(self):
         return f"{self.asset_tag} - {self.category.name}"
 
 class AssetSpecs(BaseModel):
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"Especificaciones de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
@@ -83,6 +107,7 @@ class AssetSpecs(BaseModel):
     operating_system = models.CharField(max_length=100, blank=True, null=True)
 
 class AssetNetwork(BaseModel):
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"Red de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
@@ -94,6 +119,7 @@ class AssetNetwork(BaseModel):
     operator = models.CharField(max_length=50, blank=True, null=True)
 
 class AssetWarranty(BaseModel):
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"Garantía de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
@@ -117,6 +143,6 @@ from simple_history import register as history_register
 
 try:
     User = get_user_model()
-    history_register(User, app='inventory')
+    history_register(User, app='inventory', m2m_fields=['groups', 'user_permissions'])
 except Exception:
     pass

@@ -1,0 +1,14 @@
+{% load tz %}
+<table style="width:100%">
+  <thead><tr><th>Fecha / Hora</th><th>Responsable</th><th>Acción</th>{% if related %}<th>Registro relacionado</th>{% endif %}<th>Campo</th><th>Anterior</th><th>Nuevo</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    {% if row.changes %}
+      {% for change in row.changes %}<tr>
+        {% if forloop.first %}<td rowspan="{{ row.changes|length }}">{{ row.date|localtime|date:"d/m/Y H:i:s" }}</td><td rowspan="{{ row.changes|length }}">{{ row.actor }}</td><td rowspan="{{ row.changes|length }}">{{ row.action }}{% if row.note %}<p class="help">{{ row.note }}</p>{% endif %}</td>{% if related %}<td rowspan="{{ row.changes|length }}">{{ row.entity }}</td>{% endif %}{% endif %}
+        <th>{{ change.field }}</th><td>{{ change.old }}</td><td>{{ change.new }}</td>
+      </tr>{% endfor %}
+    {% else %}<tr><td>{{ row.date|localtime|date:"d/m/Y H:i:s" }}</td><td>{{ row.actor }}</td><td>{{ row.action }}{% if row.note %}<p class="help">{{ row.note }}</p>{% endif %}</td>{% if related %}<td>{{ row.entity }}</td>{% endif %}<td colspan="3">{{ row.detail }}</td></tr>{% endif %}
+  {% empty %}<tr><td colspan="{% if related %}7{% else %}6{% endif %}">No hay versiones registradas. No se reconstruyen cambios anteriores al inicio de la auditoría.</td></tr>{% endfor %}
+  </tbody>
+</table>
