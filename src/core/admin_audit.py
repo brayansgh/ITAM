@@ -21,6 +21,9 @@ class StandardHistoryAdmin(SimpleHistoryAdmin):
     audit_related_models = ()
     audit_page_size = 50
 
+    def changelist_view(self, request, extra_context=None):
+        return super().changelist_view(request, {'title': str(self.opts.verbose_name_plural).capitalize(), **(extra_context or {})})
+
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         try:
             # ModelAdmin termina su transacción antes de devolver esta excepción.

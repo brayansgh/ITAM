@@ -1,4 +1,4 @@
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from data_imports.models import StagingAsset, ImportStatus
 from organizations.models import Company, Site, Area
@@ -8,6 +8,9 @@ from inventory.models import Category, Brand, ModelAsset, Asset, AssetSpecs, Ass
 class Command(BaseCommand):
     help = 'Migra los registros aprobados de Staging a Producción'
 
+    def add_arguments(self, parser):
+        parser.add_argument('--owner-code', choices=('ACE', 'SOL'), help='Propietaria explícita del lote; no se infiere de la administradora.')
+
     def handle(self, *args, **kwargs):
         approved = StagingAsset.objects.filter(status=ImportStatus.APPROVED).order_by('row_number')
         count = approved.count()
@@ -15,12 +18,16 @@ class Command(BaseCommand):
         if count == 0:
             self.stdout.write(self.style.WARNING("No hay registros marcados como 'Aprobado para Importar'."))
             return
+        if not kwargs.get('owner_code'):
+            raise CommandError('Indica --owner-code ACE o SOL para este lote. La propietaria no se infiere de la compañía administradora.')
+        owner = Company.objects.filter(code=kwargs['owner_code']).first()
+        if owner is None:
+            raise CommandError('No existe la propietaria indicada.')
             
         self.stdout.write(f"Iniciando la migración de {count} registros aprobados...")
         success_count = 0
         error_count = 0
         
-        current_asset_count = Asset.objects.count()
         
         for stg in approved:
             try:
@@ -50,17 +57,17 @@ class Command(BaseCommand):
                             )
                     
                     # 3. Clasificación del Inventario
-                    cat, _ = Category.objects.get_or_create(name=stg.element or 'Sin Categoría')
+                    cat = Category.objects.exclude(group='').filter(name__iexact=stg.element or '').first()
+                    if cat is None:
+                        raise CommandError('El elemento del lote debe coincidir con un tipo de activo clasificado. Revisa el catálogo antes de importar.')
                     brand, _ = Brand.objects.get_or_create(name=stg.brand or 'Genérica')
                     model_obj, _ = ModelAsset.objects.get_or_create(name=stg.model or 'Genérico', brand=brand, category=cat)
                     
                     # 4. Generación del Código Interno
-                    current_asset_count += 1
-                    new_asset_tag = f"ACT-{current_asset_count:06d}"
                     
                     # 5. Creación del Activo Físico
                     asset = Asset.objects.create(
-                        asset_tag=new_asset_tag,
+                        owner_company=owner,
                         legacy_asset_tag=stg.legacy_asset_tag,
                         serial_number=stg.serial_number,
                         category=cat,

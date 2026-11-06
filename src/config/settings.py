@@ -16,7 +16,7 @@ ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=[])
 INSTALLED_APPS = [
     'simple_history',
     'maintenance.apps.MaintenanceConfig',
-    'django.contrib.admin',
+    'core.admin_site.ITAMAdminConfig',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',

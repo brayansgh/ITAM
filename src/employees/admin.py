@@ -24,6 +24,25 @@ from .models import Employee, EmployeeStatus, RetiredEmployee
 
 @admin.register(Employee)
 class EmployeeAdmin(StandardHistoryAdmin):
+    list_per_page = 25
+    change_form_template = 'admin/employees/employee/profile.html'
+    list_filter = ('company', 'site', 'area', 'status')
+    fieldsets = (
+        ('Identificación', {'fields': ('full_name', 'document_type', 'document_number')}),
+        ('Organización', {'fields': ('company', 'site', 'area', 'status')}),
+        ('Contacto', {'fields': ('email', 'phone')}),
+    )
+
+    def render_change_form(self, request, context, add=False, change=False, form_url='', obj=None):
+        if obj:
+            context['employee_detail'] = request.method == 'GET' and request.GET.get('editar') != '1'
+            context['employee_edit_url'] = request.path + '?editar=1'
+            aa = self.admin_site._registry[Assignment]
+            assignments = aa.get_queryset(request).filter(employee=obj).select_related('asset') if aa.has_view_permission(request) else Assignment.objects.none()
+            context['employee_custody'] = assignments.filter(status=AssignmentStatus.ACTIVE)[:100]
+            context['employee_assignments'] = assignments[:100]
+            context['can_employee_custody'] = aa.has_view_permission(request)
+        return super().render_change_form(request, context, add, change, form_url, obj)
 
     search_fields = ("full_name", "document_number")
 
@@ -58,7 +77,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
 
-        if request.resolver_match.url_name in (
+        if getattr(getattr(request, 'resolver_match', None), 'url_name', '') in (
             "employees_employee_history",
             "employees_employee_simple_history",
         ):

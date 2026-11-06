@@ -29,7 +29,9 @@ class AssetListTests(TestCase):
 
     def test_list_uses_legacy_tag_and_employee(self):
         columns = self.model_admin.get_list_display(self.request)
-        self.assertEqual(columns[:2], ('legacy_asset_tag', 'assigned_employee'))
+        self.assertEqual(columns[:2], ('asset_identity', 'classification'))
+        self.assertIn('assigned_employee', columns)
+        self.assertIn('LEG-TEST', str(self.model_admin.asset_identity(self.asset)))
         self.assertNotIn('asset_tag', columns)
         self.assertNotIn('category', columns)
 

@@ -3,25 +3,38 @@ from django.db import models
 from core.models import BaseModel
 from organizations.models import Company, Site
 
+class AssetGroup(models.TextChoices):
+    COMPUTING = 'COMPUTING', 'Cómputo'
+    PERIPHERALS = 'PERIPHERALS', 'Periféricos'
+    NETWORK = 'NETWORK', 'Red y comunicaciones'
+    TELEPHONY = 'TELEPHONY', 'Telefonía'
+    OTHER = 'OTHER', 'Otros'
+
+
 class Category(BaseModel):
     history = HistoricalRecords()
-    name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True, null=True)
+    name = models.CharField('Nombre', max_length=100, unique=True)
+    description = models.TextField('Descripción', blank=True, null=True)
+    group = models.CharField('Grupo', max_length=20, choices=AssetGroup.choices, blank=True)
+
+    class Meta:
+        verbose_name = 'Tipo de activo'
+        verbose_name_plural = 'Tipos de activo'
 
     def __str__(self):
         return self.name
 
 class Brand(BaseModel):
     history = HistoricalRecords()
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField('Nombre', max_length=100, unique=True)
 
     def __str__(self):
         return self.name
 
 class ModelAsset(BaseModel):
     history = HistoricalRecords()
-    brand = models.ForeignKey(Brand, on_delete=models.PROTECT, related_name='models')
-    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='models', null=True, blank=True)
+    brand = models.ForeignKey(Brand, verbose_name='Marca', on_delete=models.PROTECT, related_name='models')
+    category = models.ForeignKey(Category, verbose_name='Tipo de activo', on_delete=models.PROTECT, related_name='models', null=True, blank=True)
     name = models.CharField(max_length=100)
 
     def __str__(self):
@@ -45,26 +58,33 @@ class PropertyType(models.TextChoices):
 class Asset(BaseModel):
     history = HistoricalRecords()
 
-    asset_tag = models.CharField(max_length=50, unique=True, help_text="Código interno único (ej. ACT-000001)")
-    legacy_asset_tag = models.CharField(max_length=50, blank=True, null=True, help_text="Placa heredada del Excel")
-    serial_number = models.CharField(max_length=100, blank=True, null=True)
+    asset_tag = models.CharField('Código interno', max_length=50, unique=True, blank=True, help_text="Generado al guardar: ACE-0001 o SOL-0001, según la propietaria.")
+    legacy_asset_tag = models.CharField('Placa de activo fijo', max_length=50, blank=True, null=True, help_text="Identificador principal, opcional y único cuando existe.")
+    serial_number = models.CharField('Número de serie', max_length=100, blank=True, null=True)
     
-    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='assets')
-    model = models.ForeignKey(ModelAsset, on_delete=models.PROTECT, related_name='assets', null=True, blank=True)
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='assets', verbose_name='Tipo de activo')
+    model = models.ForeignKey(ModelAsset, verbose_name='Marca y modelo', on_delete=models.PROTECT, related_name='assets', null=True, blank=True)
     
-    company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='assets_managed', help_text="Compañía que lo administra")
-    owner_company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='assets_owned', help_text="Compañía dueña", null=True, blank=True)
-    site = models.ForeignKey(Site, on_delete=models.PROTECT, related_name='assets', null=True, blank=True)
+    company = models.ForeignKey(Company, verbose_name='Compañía administradora', on_delete=models.PROTECT, related_name='assets_managed', help_text="Compañía que lo administra")
+    owner_company = models.ForeignKey(Company, verbose_name='Compañía propietaria', on_delete=models.PROTECT, related_name='assets_owned', help_text="Compañía dueña", null=True, blank=True)
+    site = models.ForeignKey(Site, verbose_name='Ciudad / ubicación física', on_delete=models.PROTECT, related_name='assets', null=True, blank=True)
     
-    status = models.CharField(max_length=20, choices=AssetStatus.choices, default=AssetStatus.AVAILABLE)
-    property_type = models.CharField(max_length=20, choices=PropertyType.choices, default=PropertyType.OWNED)
+    status = models.CharField('Estado', max_length=20, choices=AssetStatus.choices, default=AssetStatus.AVAILABLE)
+    property_type = models.CharField('Tipo de propiedad', max_length=20, choices=PropertyType.choices, default=PropertyType.OWNED)
     
-    purchase_date = models.DateField(blank=True, null=True)
-    warranty_end_date = models.DateField(blank=True, null=True)
-    observations = models.TextField(blank=True, null=True)
+    purchase_date = models.DateField('Fecha de compra', blank=True, null=True)
+    warranty_end_date = models.DateField('Fin de garantía', blank=True, null=True)
+    observations = models.TextField('Observaciones', blank=True, null=True)
 
     class Meta:
+        verbose_name = 'Activo'
+        verbose_name_plural = 'Inventario de activos'
         constraints = [
+            models.UniqueConstraint(
+                fields=['legacy_asset_tag'],
+                condition=models.Q(legacy_asset_tag__isnull=False) & ~models.Q(legacy_asset_tag=''),
+                name='unique_legacy_asset_tag_if_exists',
+            ),
             models.UniqueConstraint(
                 fields=['serial_number'], 
                 condition=models.Q(serial_number__isnull=False) & ~models.Q(serial_number=''), 
@@ -74,6 +94,8 @@ class Asset(BaseModel):
 
     def clean(self):
         super().clean()
+        from .identification import validate_identity
+        validate_identity(self)
         from organizations.validation import validate_company_links
         validate_company_links(self)
         from django.db import router
@@ -86,6 +108,8 @@ class Asset(BaseModel):
         using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
         with transaction.atomic(using=using):
             previous = Asset.objects.using(using).select_for_update().filter(pk=self.pk).first()
+            from .identification import prepare_identity
+            prepare_identity(self, previous, using, kwargs.get('update_fields'))
             if previous is not None and previous.status == AssetStatus.DECOMMISSIONED:
                 from django.core.exceptions import ValidationError
                 raise ValidationError("El activo dado de baja es de solo consulta.")
@@ -96,7 +120,11 @@ class Asset(BaseModel):
             return save_with_company_links(self, super().save, *args, **kwargs)
 
     def __str__(self):
-        return f"{self.asset_tag} - {self.category.name}"
+        return f"{self.display_identifier} · {self.asset_tag}" if self.legacy_asset_tag else self.asset_tag
+
+    @property
+    def display_identifier(self):
+        return self.legacy_asset_tag or self.asset_tag
 
 class AssetSpecs(BaseModel):
     history = HistoricalRecords()
@@ -123,7 +151,7 @@ class AssetNetwork(BaseModel):
     def __str__(self):
         return f"Red de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
     asset = models.OneToOneField(Asset, on_delete=models.CASCADE, related_name='network')
-    hostname = models.CharField(max_length=100, blank=True, null=True)
+    hostname = models.CharField( max_length=100, blank=True, null=True)
     mac_address = models.CharField(max_length=50, blank=True, null=True)
     imei = models.CharField(max_length=50, blank=True, null=True)
     phone_number = models.CharField(max_length=50, blank=True, null=True)
@@ -140,10 +168,10 @@ class AssetWarranty(BaseModel):
         return f"Garantía de {self.asset.asset_tag if hasattr(self, 'asset') else 'Activo'}"
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='warranties')
     supplier = models.CharField(max_length=150, blank=True, null=True)
-    purchase_date = models.DateField(blank=True, null=True)
+    purchase_date = models.DateField('Fecha de compra', blank=True, null=True)
     warranty_start = models.DateField(blank=True, null=True)
     warranty_end = models.DateField(blank=True, null=True)
-    observations = models.TextField(blank=True, null=True)
+    observations = models.TextField('Observaciones', blank=True, null=True)
 
 class DecommissionedAsset(Asset):
     class Meta:
