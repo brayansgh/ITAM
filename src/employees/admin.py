@@ -2,7 +2,7 @@ from core.admin_audit import StandardHistoryAdmin
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html
@@ -10,14 +10,14 @@ from django.utils.html import format_html
 
 from accounts.models import Role
 
-from assignments.forms import OffboardingForm, OffboardingItemFormSet
+from assignments.forms import ActiveReturnForm, OffboardingForm, OffboardingItemFormSet
 from assignments.models import (
     Assignment,
     AssignmentStatus,
     OffboardingRecord,
     OffboardingRecordItem,
 )
-from assignments.services import return_assignment
+from assignments.services import ReturnPdfError, register_active_returns, return_assignment
 
 from .models import Employee, EmployeeStatus, RetiredEmployee
 
@@ -42,7 +42,29 @@ class EmployeeAdmin(StandardHistoryAdmin):
             context['employee_custody'] = assignments.filter(status=AssignmentStatus.ACTIVE)[:100]
             context['employee_assignments'] = assignments[:100]
             context['can_employee_custody'] = aa.has_view_permission(request)
+            if context['employee_detail']:
+                context["employee_documents"] = self.employee_documents(request, obj, assignments, aa)
+
+            if (context['employee_detail'] and obj.status == EmployeeStatus.ACTIVE
+                    and self.can_process_offboarding(request, obj)
+                    and context['can_employee_custody'] and context['employee_custody'].exists()):
+                context['active_return_url'] = reverse('admin:employees_employee_return_assets', args=[obj.pk])
         return super().render_change_form(request, context, add, change, form_url, obj)
+
+    def employee_documents(self, request, employee, assignments, assignment_admin):
+        documents = [
+            {"label": f"Acta de entrega · {assignment.asset}", "date": assignment.assigned_at,
+             "url": reverse("download_act_pdf", args=[assignment.pk])}
+            for assignment in assignments.exclude(signed_act_pdf="").exclude(signed_act_pdf__isnull=True)
+            if assignment_admin.has_view_permission(request, assignment)
+        ]
+        returns_admin = self.admin_site._registry[OffboardingRecord]
+        for record in returns_admin.get_queryset(request).filter(employee=employee).select_related("employee").exclude(pdf="").exclude(pdf__isnull=True):
+            if returns_admin.can_view_receipt(request, record):
+                documents.append({"label": "Acta de devolución", "date": record.created_at,
+                                  "url": reverse("admin:assignments_offboardingrecord_view_pdf", args=[record.pk]),
+                                  "receipt_url": reverse("admin:assignments_offboardingrecord_receipt", args=[record.pk])})
+        return sorted(documents, key=lambda document: document["date"], reverse=True)
 
     search_fields = ("full_name", "document_number")
 
@@ -83,10 +105,10 @@ class EmployeeAdmin(StandardHistoryAdmin):
         ):
             return qs
 
-        return qs.filter(
-            ~Q(status=EmployeeStatus.RETIRO)
-            | Q(assignments__status=AssignmentStatus.ACTIVE)
-        ).distinct()
+        pending = Assignment.objects.filter(employee_id=OuterRef("pk"), status=AssignmentStatus.ACTIVE)
+        return qs.annotate(has_pending_assets=Exists(pending)).filter(
+            ~Q(status=EmployeeStatus.RETIRO) | Q(has_pending_assets=True)
+        )
 
     def view_assigned_assets(self, obj):
         url = (
@@ -103,17 +125,21 @@ class EmployeeAdmin(StandardHistoryAdmin):
 
     @admin.display(description="Devolución de activos")
     def process_offboarding(self, obj):
-        if obj.status != EmployeeStatus.RETIRO:
+        if obj.status not in (EmployeeStatus.ACTIVE, EmployeeStatus.RETIRO):
             return "—"
 
-        has_pending_assets = obj.assignments.filter(
-            status=AssignmentStatus.ACTIVE
-        ).exists()
+        has_pending_assets = obj.has_pending_assets
 
+        if not has_pending_assets and obj.status == EmployeeStatus.ACTIVE:
+            return "—"
         if not has_pending_assets:
             return format_html(
                 '<span style="color:green;font-weight:bold;">Completada</span>'
             )
+
+        if obj.status == EmployeeStatus.ACTIVE:
+            return format_html('<a class="button" href="{}">Devolver activos</a>',
+                               reverse("admin:employees_employee_return_assets", args=[obj.pk]))
 
         url = reverse(
             "admin:employees_employee_process_offboarding",
@@ -129,6 +155,8 @@ class EmployeeAdmin(StandardHistoryAdmin):
         urls = super().get_urls()
 
         custom_urls = [
+            path("<uuid:object_id>/devolver/", self.admin_site.admin_view(self.return_assets_view),
+                 name="employees_employee_return_assets"),
             path(
                 "<uuid:object_id>/process-offboarding/",
                 self.admin_site.admin_view(
@@ -140,12 +168,71 @@ class EmployeeAdmin(StandardHistoryAdmin):
 
         return custom_urls + urls
 
+    def return_assets_view(self, request, object_id):
+        from maintenance.models import MaintenanceRecord
+
+        if not self.can_process_offboarding(request):
+            raise PermissionDenied
+        employee = get_object_or_404(self.get_queryset(request), pk=object_id, status=EmployeeStatus.ACTIVE)
+        if not self.can_process_offboarding(request, employee):
+            raise PermissionDenied
+        assignment_admin = self.admin_site._registry[Assignment]
+        if not assignment_admin.has_view_permission(request):
+            raise PermissionDenied
+        assignments = assignment_admin.get_queryset(request).filter(
+            employee=employee, status=AssignmentStatus.ACTIVE,
+        ).select_related("asset").order_by("asset__asset_tag")
+        maintenance_admin = self.admin_site._registry[MaintenanceRecord]
+        can_decommission = maintenance_admin.can_manage_return_links(request)
+        form = ActiveReturnForm(
+            request.POST if request.method == "POST" else None,
+            assignments=assignments, can_request_decommission=can_decommission,
+        )
+        if request.method == "POST":
+            if request.POST.get("request_decommission") and not can_decommission:
+                raise PermissionDenied
+            if form.is_valid():
+                selected = form.cleaned_data["assignments"]
+                if any(not assignment_admin.has_view_permission(request, assignment) for assignment in selected):
+                    raise PermissionDenied
+
+                def authorize(ticket):
+                    if not maintenance_admin.can_link_return(request, ticket):
+                        raise PermissionDenied
+
+                try:
+                    record, tickets = register_active_returns(
+                        employee=employee, assignments=selected, reason=form.cleaned_data["reason"],
+                        condition=form.cleaned_data["condition"], observations=form.cleaned_data["observations"],
+                        actor=request.user, authorize_decommission=authorize
+                        if form.cleaned_data.get("request_decommission") else None,
+                    )
+                except ValidationError as error:
+                    form.add_error(None, error.messages)
+                except ReturnPdfError:
+                    form.add_error(None, "No se pudo generar el acta. La devolución no se registró.")
+                else:
+                    messages.success(request, f"Devolución registrada. El acta incluye {len(selected)} activo(s).")
+                    if tickets:
+                        messages.success(request, f"Trámites de baja vinculados: {len(tickets)}.")
+                    return self.return_receipt_redirect(request, record)
+        return render(request, "admin/employees/employee/return_assets.html", {
+            **self.admin_site.each_context(request), "title": "Devolver activos",
+            "employee": employee, "form": form, "has_assignments": assignments.exists(),
+        })
+
+    def return_receipt_redirect(self, request, record):
+        request.session["itam_new_return_pdf"] = str(record.pk)
+        return redirect(reverse("admin:assignments_offboardingrecord_receipt", args=[record.pk]))
+
     def process_offboarding_view(self, request, object_id):
         if not self.can_process_offboarding(request):
             raise PermissionDenied
         employee = get_object_or_404(self.get_queryset(request), pk=object_id)
         if not self.can_process_offboarding(request, employee):
             raise PermissionDenied
+        if employee.status == EmployeeStatus.ACTIVE:
+            return redirect(reverse("admin:employees_employee_return_assets", args=[employee.pk]))
 
         assignments = list(
             Assignment.objects.filter(
@@ -244,9 +331,8 @@ class EmployeeAdmin(StandardHistoryAdmin):
                             )
 
                             try:
-                                return generate_and_save_offboarding_pdf(
-                                    record
-                                )
+                                generate_and_save_offboarding_pdf(record)
+                                return self.return_receipt_redirect(request, record)
 
                             except Exception as error:
                                 messages.error(

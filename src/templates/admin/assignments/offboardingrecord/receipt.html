@@ -1,0 +1,18 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<section class="itam-panel">
+  <h2>{{ record.employee.full_name }}</h2>
+  <p>Recibido por {{ record.received_by }} · {{ record.created_at|date:"d/m/Y H:i:s T" }}</p>
+  {% if record.return_reason %}<p><strong>Motivo:</strong> {{ record.get_return_reason_display }}</p>{% endif %}
+  {% if record.observations %}<p>{{ record.observations|linebreaksbr }}</p>{% endif %}
+  <div class="itam-table-wrap"><table>
+    <thead><tr><th>Activo recibido</th><th>Condición</th><th>Observaciones</th></tr></thead>
+    <tbody>{% for item in items %}<tr><td>{{ item.assignment.asset }}</td><td>{{ item.condition }}</td><td>{{ item.observations|default:"—" }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p>
+    {% if record.pdf %}<a class="button" href="{% url 'admin:assignments_offboardingrecord_view_pdf' record.pk %}" target="_blank" rel="noopener"{% if open_pdf %} data-itam-return-pdf{% endif %}>Abrir acta PDF</a>{% endif %}
+    {% if can_manage_record %}<a class="button" href="{% url 'admin:assignments_offboardingrecord_change' record.pk %}">Ver acta y trámites de baja</a>{% endif %}
+    <a href="{% url 'admin:employees_employee_changelist' %}">Volver a Empleados</a>
+  </p>
+</section>
+{% endblock %}

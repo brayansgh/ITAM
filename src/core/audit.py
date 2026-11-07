@@ -44,6 +44,9 @@ ACTION_LABELS = {"+": "Creación", "~": "Modificación", "-": "Eliminación"}
 
 
 def format_value(field, value):
+    # El permiso de mantenimiento no concede acceso a los datos del empleado del acta.
+    if field is not None and field.name == "return_item":
+        return "Acta de devolución vinculada" if value else "Sin dato"
     if isinstance(field, models.FileField):
         return "Archivo adjunto" if value else "Sin archivo"
     if value is None or value == "" or value == []:

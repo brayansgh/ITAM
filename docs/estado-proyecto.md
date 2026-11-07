@@ -410,3 +410,37 @@ El usuario solicitó commit y push de todos los cambios pendientes, incluidos lo
 - Marcas muestra el total de activos visibles y enlaces a los listados filtrados de vigentes y bajas. Cada conteo usa la consulta y los permisos del listado correspondiente.
 - La plantilla compartida del buscador adopta el campo integrado y el botón naranja de ITAM. Conserva los filtros, la ayuda y el conteo de resultados de Django.
 - Pasaron 56 pruebas de inventario e interfaz en PostgreSQL temporal separado de producción y sin TEST.MIRROR. Chromium verificó el envío con filtro y la presentación a 1440, 768, 390 y 320 px con datos sintéticos.
+
+## Devolución de activos de empleados activos
+
+- Parche y plan revisables en /tmp/itam-individual-return. El usuario autorizó su aplicación en producción.
+- Selección múltiple desde Empleados con motivo y condición comunes. Un acta por envío con los activos seleccionados. Se conserva el flujo de retiro.
+- Vínculo de baja por activo recibido, al registrar la devolución o después desde el acta. Usa los permisos y validaciones de cierre existentes. Si falla el PDF, se revierte la recepción y el vínculo.
+- Pasaron 183 pruebas en PostgreSQL temporal separado de producción y sin TEST.MIRROR. Chequeo de Django y comprobación de migraciones correctos. Chromium verificó la selección múltiple a 1440, 768, 390 y 320 px con datos sintéticos.
+
+- Se aplicaron assignments.0006 y maintenance.0006 con respaldos privados verificados y pausa del servicio web. La comparación de 46 tablas confirmó que se conservaron los datos previos, incluidas 2 actas y 6 tickets.
+- Servicio reabierto. Se renderizó en solo lectura el formulario de un empleado activo con custodia. El acceso anónimo a las vistas protegidas redirige al login y la entrega directa del archivo sintético en media devolvió 404 en Django y Nginx. Chequeo de Django correcto, migraciones al día y cobertura de auditoría sin modelos faltantes.
+
+## Correcciones de devoluciones y bajas
+
+- El registro de una devolución abre el acta en otra pestaña y muestra un resumen con todos los activos recibidos. Los documentos generados se enlazan desde el perfil del empleado y el campo Acta PDF de cada asignación devuelta enlaza el acta correspondiente.
+- Bajas tiene rutas, formularios y documentos separados de Mantenimiento. Desde un ticket técnico se puede iniciar un trámite de baja independiente. Las evidencias se guardan con el trámite abierto o en proceso. Completar la baja exige motivo y notas de resolución.
+- Pasaron 184 pruebas en PostgreSQL aislado y Chromium verificó la navegación a dos pestañas con datos sintéticos.
+- Con autorización, se aplicó maintenance.0007_motivo_baja el 7 de noviembre de 2026 tras verificar respaldos privados de código y PostgreSQL. Se compararon los campos preexistentes de 46 tablas y se conservaron los registros, incluidas 4 actas y 7 tickets. Los motivos históricos quedaron vacíos.
+- Tras reiniciar el servicio, se verificaron el resumen y las vistas de bajas en solo lectura, el acceso anónimo protegido a las actas, el bloqueo de media por Nginx, el recurso JavaScript actualizado y los chequeos de Django, migraciones y auditoría.
+
+## Ajustes de adjuntos y presentación
+
+- Bajas guarda el adjunto y completa el trámite en un solo envío. El cierre se aplica después de guardar las evidencias dentro de la transacción del administrador. Si falta el motivo, el formulario conserva el campo de carga y muestra la validación.
+- El detalle de devolución muestra la fecha de registro en español y una sola referencia visible por activo. El listado técnico se titula Mantenimiento.
+- Se aplicó el cambio de código sin migraciones. Pasaron 185 pruebas en PostgreSQL aislado y Chromium comprobó el envío de baja sin diálogo bloqueante. En producción se verificaron las vistas en solo lectura y la entrega del JavaScript actualizado.
+
+## Migas de pan del administrador
+
+- Una plantilla común usa los nombres vigentes del menú para las migas de pan. Los listados omiten el nivel técnico del módulo, las fichas enlazan al listado cuando hay permiso y los trámites de baja muestran Bajas como origen. Los índices de aplicaciones muestran sus nombres en español.
+- Verificados 17 listados en producción en solo lectura, 186 pruebas en PostgreSQL aislado y el chequeo de Django. Cambio sin migraciones.
+
+## Etiquetas de Empleados
+
+- El nombre del modelo y las etiquetas de campos se muestran en español en el listado, los filtros, los formularios y los avisos. Se verificó el listado de producción en solo lectura y pasaron 31 pruebas en PostgreSQL aislado, incluida la confirmación de un guardado sintético.
+- La migración employees.0006 registra las etiquetas en el estado de Django. Se verificó que no genera cambios de esquema ni datos. Se registró en producción con autorización. Django quedó sin migraciones pendientes y el chequeo pasó.

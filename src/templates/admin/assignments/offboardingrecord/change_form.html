@@ -1,0 +1,27 @@
+{% extends "admin/change_form.html" %}
+{% block extrastyle %}
+{{ block.super }}
+<style>#items-group td.original p { display: none; }</style>
+{% endblock %}
+{% block content %}
+{% if return_decommission_entries %}
+<section class="itam-panel itam-detail-section">
+  <h2>Trámites de baja por activo</h2>
+  <ul class="itam-result-list">
+    {% for entry in return_decommission_entries %}
+      <li>
+        <strong>{{ entry.asset }}</strong>
+        {% for ticket in entry.tickets %} · <a href="{{ ticket.url }}">Ver trámite · {{ ticket.label }}</a>{% endfor %}
+        {% if entry.start_url %}
+          <form method="post" action="{{ entry.start_url }}" class="itam-filter-row">
+            {% csrf_token %}
+            <input type="submit" value="Vincular o iniciar trámite de baja">
+          </form>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{{ block.super }}
+{% endblock %}

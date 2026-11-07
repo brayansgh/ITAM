@@ -132,3 +132,103 @@ def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition):
     asset.save(update_fields=["status", "updated_at"])
 
     return assignment
+
+
+class ReturnPdfError(Exception):
+    """El acta no se pudo generar o almacenar."""
+
+
+@transaction.atomic
+def link_return_to_decommission(*, item, actor, authorize):
+    from maintenance.models import MaintenanceRecord, MaintenanceStatus, MaintenanceType
+    from maintenance.services import OPEN_STATUSES
+
+    assignment = item.assignment
+    asset = Asset.objects.select_for_update().get(pk=assignment.asset_id)
+    if not item.offboarding_record.return_reason or assignment.status != AssignmentStatus.RETURNED:
+        raise ValidationError("Se necesita un acta de devolución de activos registrada.")
+    if asset.assignments.filter(status=AssignmentStatus.ACTIVE).exists():
+        raise ValidationError("El activo tiene una custodia vigente. Registra su devolución antes de vincular el acta.")
+    if asset.status == AssetStatus.DECOMMISSIONED:
+        raise ValidationError("Este activo ya está dado de baja.")
+    tickets = list(MaintenanceRecord.objects.select_for_update().filter(
+        asset=asset, type=MaintenanceType.DECOMMISSION, status__in=OPEN_STATUSES,
+    )[:2])
+    if len(tickets) > 1:
+        raise ValidationError("Hay varios trámites de baja abiertos para este activo. Revísalos antes de vincular el acta.")
+    ticket = tickets[0] if tickets else None
+    authorize(ticket)
+    if ticket:
+        if ticket.return_item_id == item.pk:
+            return ticket
+        if ticket.return_item_id:
+            raise ValidationError("El trámite abierto ya está vinculado a otra devolución.")
+        ticket.return_item = item
+        ticket._history_user = actor
+        ticket.save(update_fields=["return_item", "updated_at"])
+        return ticket
+
+    ticket = MaintenanceRecord(
+        asset=asset, type=MaintenanceType.DECOMMISSION, status=MaintenanceStatus.OPEN,
+        reported_by=actor, return_item=item,
+        description=f"Motivo de devolución: {item.offboarding_record.get_return_reason_display()}.\n"
+                    f"Condición al recibir: {item.condition}",
+    )
+    ticket._history_user = actor
+    ticket.save()
+    return ticket
+
+
+def register_active_returns(*, employee, assignments, reason, condition, observations, actor,
+                            authorize_decommission=None):
+    import logging
+
+    from employees.models import EmployeeStatus
+    from inventory.offboarding_pdf import generate_and_save_offboarding_pdf
+    from .models import OffboardingRecord, OffboardingRecordItem, ReturnReason
+
+    if reason not in ReturnReason.values:
+        raise ValidationError("Selecciona un motivo de devolución válido.")
+    selected = sorted(assignments, key=lambda assignment: assignment.asset_id)
+    if not selected or any(assignment.employee_id != employee.pk for assignment in selected):
+        raise ValidationError("Selecciona los activos vigentes de este empleado.")
+    record = None
+    try:
+        with transaction.atomic():
+            # Compartir el orden de bloqueo de los otros flujos de custodia.
+            asset_ids = [assignment.asset_id for assignment in selected]
+            list(Asset.objects.select_for_update().filter(pk__in=asset_ids).order_by("pk"))
+            locked_employee = Employee.objects.select_for_update().get(pk=employee.pk)
+            if locked_employee.status != EmployeeStatus.ACTIVE:
+                raise ValidationError("Este flujo requiere un empleado activo.")
+            record = OffboardingRecord(employee=locked_employee, received_by=actor,
+                                       return_reason=reason, observations=observations)
+            record._history_user = actor
+            record.save()
+            tickets = []
+            for assignment in selected:
+                returned = return_assignment(
+                    assignment_id=assignment.pk, condition=condition, returned_by=actor,
+                )
+                if returned.employee_id != locked_employee.pk:
+                    raise ValidationError("La custodia cambió. Actualiza la página.")
+                item = OffboardingRecordItem(offboarding_record=record, assignment=returned,
+                                            condition=returned.return_condition)
+                item._history_user = actor
+                item.save()
+                if authorize_decommission is not None:
+                    tickets.append(link_return_to_decommission(
+                        item=item, actor=actor, authorize=authorize_decommission,
+                    ))
+            try:
+                generate_and_save_offboarding_pdf(record)
+            except Exception as error:
+                raise ReturnPdfError from error
+        return record, tickets
+    except Exception:
+        if record and record.pdf:
+            try:
+                record.pdf.storage.delete(record.pdf.name)
+            except Exception:
+                logging.getLogger(__name__).warning("No se pudo retirar el PDF de una devolución revertida.")
+        raise

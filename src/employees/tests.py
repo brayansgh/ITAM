@@ -70,7 +70,7 @@ class OffboardingAuthorizationTests(TestCase):
         self.client.force_login(user)
         with patch("inventory.offboarding_pdf.generate_and_save_offboarding_pdf",
                    return_value=HttpResponse(b"%PDF synthetic", content_type="application/pdf")) as pdf:
-            self.assertEqual(self.client.post(self.url, self.data).status_code, 200)
+            self.assertEqual(self.client.post(self.url, self.data).status_code, 302)
             pdf.assert_called_once()
         self.assignment.refresh_from_db()
         self.asset.refresh_from_db()

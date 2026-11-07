@@ -2,12 +2,12 @@ from inventory.navigation import AssetLinkAdminMixin
 from core.admin_audit import StandardHistoryAdmin
 from django import forms
 from django.contrib import admin, messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
 from django.http import FileResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 
 from accounts.models import Role
 from inventory.models import AssetStatus
@@ -19,7 +19,7 @@ from .models import (
     OffboardingRecord,
     OffboardingRecordItem,
 )
-from .services import create_assignment
+from .services import create_assignment, link_return_to_decommission
 from .utils import generate_act_pdf
 
 
@@ -206,6 +206,23 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         obj._state.adding = False
         obj._state.db = assignment._state.db
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("offboarding_item__offboarding_record")
+
+    def get_list_display(self, request):
+        return tuple(self.pdf_column(request) if field == "download_pdf" else field
+                     for field in super().get_list_display(request))
+
+    def pdf_column(self, request):
+        if hasattr(request, "_itam_assignment_pdf_column"):
+            return request._itam_assignment_pdf_column
+
+        @admin.display(description="Acta PDF")
+        def documents(obj):
+            return self.download_pdf(obj, request)
+        request._itam_assignment_pdf_column = documents
+        return documents
+
     def get_readonly_fields(self, request, obj=None):
         if obj:
             return (
@@ -218,7 +235,7 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
                 "return_condition",
                 "status",
                 "observations",
-                "download_pdf",
+                self.pdf_column(request),
             )
 
         return (
@@ -231,24 +248,24 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         )
 
     @admin.display(description="Acta PDF")
-    def download_pdf(self, obj):
+    def download_pdf(self, obj, request=None):
+        if not obj:
+            return "—"
+        links = []
         if obj.signed_act_pdf:
-            url = reverse(
-                "download_act_pdf",
-                args=[obj.id],
-            )
+            links.append(("", reverse("download_act_pdf", args=[obj.pk]), "Acta de entrega"))
+        item = getattr(obj, "offboarding_item", None) if request is not None else None
+        if (item and item.offboarding_record.pdf and
+                self.admin_site._registry[OffboardingRecord].can_view_receipt(request, item.offboarding_record)):
+            links.append((
+                "button itam-primary",
+                reverse("admin:assignments_offboardingrecord_view_pdf", args=[item.offboarding_record_id]),
+                "Acta de devolución",
+            ))
+        return format_html_join(
+            " · ", '<a class="{}" href="{}" target="_blank" rel="noopener">{}</a>', links,
+        ) or "—"
 
-            return format_html(
-                '<a href="{}" target="_blank" '
-                'style="background:#417690;'
-                'color:white;padding:3px 8px;'
-                'border-radius:3px;'
-                'text-decoration:none;">'
-                "Ver PDF</a>",
-                url,
-            )
-
-        return "-"
 
 
 # NUEVA VISTA: Panel consolidado por Usuario
@@ -419,12 +436,19 @@ class OffboardingRecordItemInline(admin.TabularInline):
     can_delete = False
 
     fields = (
-        "assignment",
+        "received_asset",
         "condition",
         "observations",
     )
 
     readonly_fields = fields
+
+    @admin.display(description="Activo recibido")
+    def received_asset(self, obj):
+        return obj.assignment.asset if obj else "—"
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("assignment__asset")
 
     def has_add_permission(self, request, obj=None):
         return False
@@ -432,10 +456,11 @@ class OffboardingRecordItemInline(admin.TabularInline):
 
 @admin.register(OffboardingRecord)
 class OffboardingRecordAdmin(StandardHistoryAdmin):
+    change_form_template = "admin/assignments/offboardingrecord/change_form.html"
 
     list_display = (
         "employee",
-        "created_at",
+        "receipt_date",
         "received_by",
         "view_pdf",
     )
@@ -454,22 +479,28 @@ class OffboardingRecordAdmin(StandardHistoryAdmin):
     readonly_fields = (
         "employee",
         "received_by",
+        "return_reason",
         "observations",
         "view_pdf",
-        "created_at",
+        "receipt_date",
         "updated_at",
     )
 
     fields = (
         "employee",
         "received_by",
-        "created_at",
+        "receipt_date",
+        "return_reason",
         "observations",
         "view_pdf",
     )
 
     inlines = [OffboardingRecordItemInline]
     audit_related_models = ((OffboardingRecordItem, "offboarding_record"),)
+
+    @admin.display(description="Fecha de registro", ordering="created_at")
+    def receipt_date(self, obj):
+        return obj.created_at
 
     def has_add_permission(self, request):
         return False
@@ -493,10 +524,84 @@ class OffboardingRecordAdmin(StandardHistoryAdmin):
             url,
         )
 
+    def render_change_form(self, request, context, add=False, change=False, form_url='', obj=None):
+        if obj and obj.return_reason:
+            from maintenance.models import MaintenanceRecord
+
+            maintenance_admin = self.admin_site._registry[MaintenanceRecord]
+            entries = []
+            for item in obj.items.select_related("assignment__asset").prefetch_related("decommission_tickets"):
+                tickets = []
+                if maintenance_admin.has_module_permission(request):
+                    tickets = [
+                        {"label": ticket.get_status_display(),
+                         "url": reverse("admin:maintenance_decommission_change", args=[ticket.pk])}
+                        for ticket in item.decommission_tickets.all()
+                        if maintenance_admin.has_view_permission(request, ticket)
+                    ]
+                start_url = None
+                if (maintenance_admin.can_manage_return_links(request)
+                        and item.assignment.asset.status != AssetStatus.DECOMMISSIONED):
+                    start_url = reverse("admin:assignments_offboardingrecord_link_decommission",
+                                        args=[obj.pk, item.pk])
+                entries.append({"asset": item.assignment.asset, "tickets": tickets, "start_url": start_url})
+            context["return_decommission_entries"] = entries
+        return super().render_change_form(request, context, add, change, form_url, obj)
+
+    def link_decommission_view(self, request, object_id, item_id):
+        from django.http import HttpResponseNotAllowed
+        from maintenance.models import MaintenanceRecord
+
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+        record = get_object_or_404(self.get_queryset(request), pk=object_id)
+        if not (self.has_module_permission(request) and self.has_view_permission(request, record)):
+            raise PermissionDenied
+        item = get_object_or_404(record.items.select_related("assignment", "offboarding_record"), pk=item_id)
+        maintenance_admin = self.admin_site._registry[MaintenanceRecord]
+
+        def authorize(ticket):
+            if not maintenance_admin.can_link_return(request, ticket):
+                raise PermissionDenied
+
+        try:
+            link_return_to_decommission(item=item, actor=request.user, authorize=authorize)
+        except ValidationError as error:
+            messages.error(request, " ".join(error.messages))
+        else:
+            messages.success(request, "Trámite de baja vinculado al activo y a su acta de devolución.")
+        return redirect(reverse("admin:assignments_offboardingrecord_change", args=[record.pk]))
+
+    def can_view_receipt(self, request, record):
+        if self.has_view_permission(request, record):
+            return True
+        from employees.models import Employee
+        employee_admin = self.admin_site._registry[Employee]
+        return (record.received_by_id == request.user.pk
+                and employee_admin.can_process_offboarding(request, record.employee))
+
+    def receipt_view(self, request, object_id):
+        record = get_object_or_404(self.get_queryset(request).select_related("employee", "received_by"), pk=object_id)
+        if not self.can_view_receipt(request, record):
+            raise PermissionDenied
+        open_pdf = request.session.get("itam_new_return_pdf") == str(record.pk)
+        if open_pdf:
+            request.session.pop("itam_new_return_pdf")
+        return render(request, "admin/assignments/offboardingrecord/receipt.html", {
+            **self.admin_site.each_context(request), "title": "Resumen de devolución",
+            "record": record, "items": record.items.select_related("assignment__asset"),
+            "open_pdf": open_pdf, "can_manage_record": self.has_view_permission(request, record),
+        })
+
     def get_urls(self):
         urls = super().get_urls()
 
         custom_urls = [
+            path("<uuid:object_id>/resumen/", self.admin_site.admin_view(self.receipt_view),
+                 name="assignments_offboardingrecord_receipt"),
+            path("<uuid:object_id>/activos/<uuid:item_id>/tramitar-baja/",
+                 self.admin_site.admin_view(self.link_decommission_view),
+                 name="assignments_offboardingrecord_link_decommission"),
             path(
                 "<uuid:object_id>/view-pdf/",
                 self.admin_site.admin_view(
@@ -514,10 +619,7 @@ class OffboardingRecordAdmin(StandardHistoryAdmin):
             pk=object_id,
         )
 
-        if not self.has_view_permission(
-            request,
-            record,
-        ):
+        if not self.can_view_receipt(request, record):
             raise PermissionDenied
 
         if not record.pdf:

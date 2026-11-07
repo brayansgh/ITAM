@@ -1,0 +1,11 @@
+{% if crumbs %}
+<nav aria-label="Ruta de navegación">
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Inicio</a>
+    {% for label, url in crumbs %}
+      <span aria-hidden="true">›</span>
+      {% if url %}<a href="{{ url }}">{{ label }}</a>{% else %}<span{% if forloop.last %} aria-current="page"{% endif %}>{{ label }}</span>{% endif %}
+    {% endfor %}
+  </div>
+</nav>
+{% endif %}
