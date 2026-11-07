@@ -1,8 +1,11 @@
 from core.admin_audit import StandardHistoryAdmin
 from django.contrib import admin
-from django.db.models import OuterRef, Subquery
+from django.db.models import Count, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.urls import reverse
-from .models import Category, Brand, ModelAsset, Asset, AssetSpecs, AssetNetwork, AssetWarranty
+from django.utils.html import format_html, format_html_join
+from django.utils.http import urlencode
+from .models import Category, Brand, ModelAsset, Asset, AssetSpecs, AssetNetwork, AssetWarranty, DecommissionedAsset
 from .forms import AssetRegistrationForm
 from django.forms import modelform_factory
 
@@ -14,14 +17,44 @@ class CategoryAdmin(StandardHistoryAdmin):
 
 @admin.register(Brand)
 class BrandAdmin(StandardHistoryAdmin):
-    list_display = ('name', 'created_at')
+    list_display = ('name', 'associated_assets', 'created_at')
     search_fields = ('name',)
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        for key, model in (('active_assets', Asset), ('decommissioned_assets', DecommissionedAsset)):
+            asset_admin = self.admin_site._registry[model]
+            if not (asset_admin.has_module_permission(request) and asset_admin.has_view_permission(request)):
+                continue
+            counts = (asset_admin.get_queryset(request)
+                      .filter(brand_id=OuterRef('pk')).order_by().values('brand_id')
+                      .annotate(total=Count('pk', distinct=True)).values('total'))
+            queryset = queryset.annotate(**{key: Coalesce(Subquery(counts), 0)})
+        return queryset
+
+    @admin.display(description='Activos visibles')
+    def associated_assets(self, obj):
+        links = []
+        total = 0
+        for key, label, route in (
+            ('active_assets', 'Ver vigentes', 'admin:inventory_asset_changelist'),
+            ('decommissioned_assets', 'Ver bajas', 'admin:inventory_decommissionedasset_changelist'),
+        ):
+            count = getattr(obj, key, None)
+            if count is not None:
+                total += count
+                url = reverse(route) + '?' + urlencode({'brand__id__exact': obj.pk})
+                links.append((url, label, count))
+        if not links:
+            return 'Sin permiso para consultar activos'
+        actions = format_html_join('', '<a href="{}" class="button">{} ({})</a>', links)
+        return format_html('<div class="itam-brand-assets"><strong>{}</strong>{}</div>', total, actions)
 
 @admin.register(ModelAsset)
 class ModelAssetAdmin(StandardHistoryAdmin):
-    list_display = ('name', 'brand', 'category')
-    list_filter = ('brand', 'category')
-    search_fields = ('name', 'brand__name')
+    list_display = ('name', 'created_at')
+    fields = ('name',)
+    search_fields = ('name',)
 
 class FrozenAssetInlineMixin:
     def has_add_permission(self, request, obj=None):
@@ -36,18 +69,21 @@ class FrozenAssetInlineMixin:
 
 class AssetSpecsInline(FrozenAssetInlineMixin, admin.StackedInline):
     model = AssetSpecs
+    verbose_name = 'Información técnica'
     verbose_name_plural = 'Información técnica'
     form = modelform_factory(AssetSpecs, fields='__all__', labels={'ram': 'Memoria RAM', 'storage': 'Almacenamiento', 'processor': 'Procesador', 'operating_system': 'Sistema operativo'})
     can_delete = False
 
 class AssetNetworkInline(FrozenAssetInlineMixin, admin.StackedInline):
     model = AssetNetwork
+    verbose_name = 'Red y telefonía'
     verbose_name_plural = 'Red y telefonía'
     form = modelform_factory(AssetNetwork, fields='__all__', labels={'hostname': 'Hostname', 'mac_address': 'Dirección MAC', 'imei': 'IMEI', 'phone_number': 'Número de teléfono', 'operator': 'Operador'})
     can_delete = False
 
 class AssetWarrantyInline(FrozenAssetInlineMixin, admin.StackedInline):
     model = AssetWarranty
+    verbose_name = 'Garantía y compra'
     verbose_name_plural = 'Garantías y compra'
     form = modelform_factory(AssetWarranty, fields='__all__', labels={'supplier': 'Proveedor', 'warranty_start': 'Inicio de garantía', 'warranty_end': 'Fin de garantía'})
     extra = 0
@@ -58,12 +94,12 @@ class AssetAdmin(StandardHistoryAdmin):
     list_per_page = 25
     fieldsets = (
         ('Clasificación', {'fields': ('group', 'category')}),
-        ('Identificación y propiedad', {'fields': ('legacy_asset_tag', 'asset_tag', 'owner_company', 'model', 'serial_number', 'property_type')}),
+        ('Identificación y propiedad', {'fields': ('legacy_asset_tag', 'asset_tag', 'owner_company', 'brand', 'model', 'serial_number', 'property_type')}),
         ('Administración y ubicación', {'fields': ('company', 'site')}),
         ('Información adicional', {'fields': ('status', 'purchase_date', 'warranty_end_date', 'observations')}),
     )
     list_display = ('asset_tag', 'category', 'brand_model', 'serial_number', 'company', 'status')
-    list_filter = ('company', 'site', 'category__group', 'category', 'status', 'property_type')
+    list_filter = ('company', 'site', 'category__group', 'category', 'brand', 'status', 'property_type')
     search_fields = ('asset_tag', 'legacy_asset_tag', 'serial_number', 'network__hostname', 'current_employee_name')
     change_form_template = 'admin/inventory/asset/change_form.html'
     inlines = [AssetSpecsInline, AssetNetworkInline, AssetWarrantyInline]
@@ -81,7 +117,7 @@ class AssetAdmin(StandardHistoryAdmin):
         from assignments.models import Assignment, AssignmentStatus
         active = Assignment.objects.filter(asset_id=OuterRef("pk"), status=AssignmentStatus.ACTIVE)
         return super().get_queryset(request).select_related(
-            "category", "model__brand", "company", "owner_company", "site",
+            "category", "brand", "model", "company", "owner_company", "site",
         ).annotate(current_employee_name=Subquery(active.values("employee__full_name")[:1]))
 
     def get_urls(self):
@@ -157,17 +193,15 @@ class AssetAdmin(StandardHistoryAdmin):
         return super().has_delete_permission(request, obj)
 
     def brand_model(self, obj):
-        if obj.model:
-            return f"{obj.model.brand.name} {obj.model.name}"
-        return "-"
+        return " · ".join(value for value in (
+            obj.brand.name if obj.brand else "", obj.model.name if obj.model else "",
+        ) if value) or "-"
     brand_model.short_description = "Marca y Modelo"
     class Media:
         js = ('js/hide_change_reason.js', 'itam/asset-form.js')
 
 # --- SEPARACIÓN DEL CEMENTERIO DE ACTIVOS ---
-from django.utils.html import format_html
 from django.apps import apps
-from .models import Asset, DecommissionedAsset
 
 if Asset in admin.site._registry:
     OriginalAssetAdmin = type(admin.site._registry[Asset])

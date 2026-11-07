@@ -352,3 +352,61 @@ El usuario solicitó expresamente hacer commit y push de la implementación ante
 ## Versionado del pulido de interfaz — 6 de noviembre de 2026
 
 El usuario solicitó commit y push de todos los cambios pendientes, incluidos los suyos: nombre C.I. ACEPALMA, título y pie de página, color base y configuración de lanzamiento de Chrome en .vscode/launch.json. Se incluyen también los ajustes de dashboard, favicon, tipografía, paleta, buscador, botones, navegación, retirada de acciones masivas y sus pruebas/documentación. AGENTS.md permanece local e ignorado; respaldos y archivos temporales quedan fuera. Las 40 pruebas de core y las 13 pruebas finales de interfaz corresponden a las ejecuciones anteriores documentadas; no se repitieron por esta operación de versionado.
+
+## Auditoría integrada al diseño corporativo — 6 de noviembre de 2026
+
+- Catálogo reorganizado en tarjetas por aplicación con los mismos enlaces permitidos de get_app_list. No se incorporan datos ni conteos globales de operaciones. Estado vacío explícito cuando no hay módulos disponibles.
+- Historial común renovado con paneles, resumen de versiones de datos, navegación por secciones, etiquetas de acciones y columnas anterior/nuevo diferenciadas. Datos, anexos y eventos administrativos siguen separados; se conservan avisos de límites y falta de evidencia. Fechas con segundos y zona horaria.
+- Tablas accesibles por teclado con desplazamiento interno; paginación conserva la página de la otra sección y enlaza a su encabezado. No se alteraron captura, contenido ni permisos del historial; continúa de solo lectura y con autoescape.
+- **42 pruebas de core, OK**, 17,930 s, PostgreSQL temporal test_itam_interface_20261106, distinto de producción y sin TEST.MIRROR; destruido al finalizar. Incluye agrupación y estado vacío según permisos, valores escapados, separación de secciones, auditoría de anexos, protección de documentos/contraseñas y bloqueo de restauraciones.
+- Chromium con catálogo, historial y estado sin versiones, usando únicamente datos sintéticos: 1440, 1024, 768, 390 y 320 px. Sin desbordamiento horizontal de página ni errores JavaScript; paginaciones independientes verificadas. Capturas fuera del repositorio.
+- `manage.py check` y `git diff --check` correctos. No se repitió la suite completa; sin cambios de modelos, migraciones, datos de producción, infraestructura, commit ni push.
+
+## Tipo y empleado en Documentos y actas — 6 de noviembre de 2026
+
+- Tabla con columnas explícitas Tipo de documento y Empleado para entregas y devoluciones. Se conserva la referencia al activo en entregas; en devoluciones no se duplica el nombre del empleado en otra columna. Mantenimiento/bajas se identifica por separado con empleado No aplica, sin inferir custodios.
+- Relaciones de empleado/activo precargadas con select_related; se conservan filtros, paginación, permisos por registro y enlaces de descarga protegidos. Sin modificaciones de archivos o datos de negocio.
+- **15 pruebas de interfaz, OK**, 6,896 s, PostgreSQL temporal test_itam_interface_20261106, distinto de producción y sin TEST.MIRROR, destruido al finalizar. Incluye tipo y empleado para entregas/devoluciones, mantenimiento sin empleado inferido, enlaces protegidos sin /media y denegación a usuario sin permisos.
+- `manage.py check` y `git diff --check` correctos. No se repitió la suite completa. Sin migraciones, infraestructura, commit ni push.
+
+## Estilo uniforme de formularios — 6 de noviembre de 2026
+
+- Nueva plantilla común de formularios y estilos bajo itam-change-form: cabecera de estado, tarjetas, etiquetas superiores, dos columnas adaptables, controles de 44 px, textos largos compactos, ayudas/errores y barra de acciones uniforme. Se elimina el margen negativo de Histórico en formularios.
+- Activos, bajas y mantenimiento comparten el estilo con empleados, catálogos, usuarios y grupos. Anexos de información técnica, red/telefonía y garantías con nombres singulares en español, sin modificar modelos ni etiquetas persistidas.
+- Se conservan plantillas y widgets de campo originales, selectores dependientes, gestión de formsets, permisos, inmutabilidad y descargas privadas. Prueba explícita de tickets cerrados y bajas definitivas sin controles de edición, también ante POST y editar=1.
+- Suite completa en copia aislada actualizada: **171 pruebas, OK**, 70,096 s. PostgreSQL temporal test_itam_uniform_forms_20261106, distinto de producción y sin TEST.MIRROR; destruido al finalizar. Tras el ajuste final de títulos/textos, **16 pruebas de interfaz, OK**, 7,394 s.
+- Doce formularios reales renderizados con datos sintéticos en test_itam_forms_visual_20261106, distinto de producción, sin TEST.MIRROR y destruido al finalizar: activo nuevo/edición, mantenimiento, baja nueva/en trámite/cerrada, activo en baja, empleado, categoría, usuario, grupo y errores.
+- Chromium a 1440, 1024, 768, 390 y 320 px: sin desbordamiento horizontal tras corregir un título largo de baja. Verificados tipo de baja fijo, carga dependiente Telefonía/Radioteléfono, cierres sin guardado/archivos, mensajes de error, adición dinámica de documentos y transferencia de permisos. Verificación final de widgets sin errores JavaScript. Capturas fuera del repositorio.
+- `manage.py check` y `git diff --check` correctos. Sin cambios de datos de producción, modelos, migraciones o infraestructura; sin commit ni push. Los cambios pendientes anteriores de auditoría y documentos se conservan.
+
+## Marca/modelo independientes y renovación CSRF — preparado, pendiente de autorización
+
+- Implementación aislada en /tmp/itam-independent-identification/src; parche /tmp/itam-independent-identification/cambios.patch y plan /tmp/itam-independent-identification/PLAN.md. `git apply --check` confirma que encaja sin aplicarlo. El código actual del servicio y la base de producción no se modificaron por esta preparación.
+- Marca y Modelo como campos opcionales e independientes del activo; se retira la validación que exigía que el modelo perteneciera al tipo elegido. Catálogo de modelos sin marca/tipo obligatorios; asociaciones antiguas conservadas como legado. Integraciones de fichas, importación y nuevas actas ajustadas; PDFs existentes intactos.
+- inventory.0010 añade el esquema; inventory.0011 copia exactamente la marca del modelo legado y crea una versión actual con motivo explícito y sin responsable inventado. Conserva todas las versiones anteriores. Preflight de solo lectura: 352 activos con marca de modelo, incluidos 3 en baja, y 56 versiones previas de activos; se propondrían 352 versiones de migración. No se cambian estados, códigos, placas, propietarios ni custodias. Requiere autorización antes de aplicarse.
+- Prueba CSRF con verificación habilitada: token antiguo rechazado, token actual permite guardar compra/garantía. Preparada vista autenticada sin caché y renovación antes del POST; no se deshabilita CSRF ni se leen cookies HttpOnly. No se afirma que se haya probado la causa exacta de la sesión real reportada.
+- Seis regresiones específicas OK, 8,431 s. Suite completa aislada: **176 pruebas, OK**, 74,114 s, PostgreSQL temporal test_itam_independent_brand_20261106, distinto de producción y sin TEST.MIRROR; destruido al finalizar. Incluye migraciones reales, marcas independientes, garantías, permisos y conservación de historial.
+- Chromium real contra base sintética: formulario abierto, cierre/inicio de sesión en otra pestaña y guardado de marca/compra/garantía sin 403 (302). Datos verificados; fallo simulado de renovación conserva valores y bloquea POST. 1440, 390 y 320 px sin desbordamiento ni errores JavaScript. Servidor y base test_itam_independent_visual_20261106 retirados.
+- check y makemigrations --check --dry-run de la copia correctos. Sin migraciones en producción, cambios de infraestructura, commit ni push. Los cambios anteriores pendientes de auditoría/documentos/formularios se preservan.
+
+## Aplicación de marca/modelo independientes y renovación CSRF — 6 de noviembre de 2026
+
+- El usuario autorizó aplicar el plan. Respaldos privados de código y PostgreSQL custom con permisos restrictivos, incluido respaldo final con servicio web detenido, validados con pg_restore --list. No se expone su contenido.
+- El primer intento de copia encontró una plantilla propiedad de root. Se verificó el estado parcial frente a los hashes y el respaldo y se completó la copia desde el contenedor conservando propietario y permisos, sin sobrescribir ediciones ajenas.
+- Aplicadas inventory.0010_marca_modelo_independientes y inventory.0011_conservar_marcas_legadas. Comparación por hashes de **46 tablas**: se conservaron los campos anteriores, las **352 marcas** de la asociación existente (incluidas 3 bajas) y las **56 versiones previas** de activos; se añadieron **352 versiones de migración** con motivo explícito y sin actor inventado. Sin cambiar estados, placas, códigos, propietarios ni custodias.
+- Servicio web reactivado. `check`, `migrate --check` y `makemigrations --check --dry-run` correctos. `audit_status --json --fail-on-missing` sin modelos faltantes. Login y JavaScript actualizado HTTP 200. Formulario real comprobado en solo lectura con Marca y Modelo opcionales e independientes; vista de token autenticada y sin caché.
+- Descargas de entregas, devoluciones y mantenimiento siguen requiriendo sesión. /media y archivo sintético bloqueados en Nginx (404); Django tampoco entrega el archivo. Archivo sintético retirado. No se guardó el activo real reportado ni se regeneraron PDFs.
+- La suite de 176 pruebas y el guardado de garantía tras rotar el token corresponden a la copia aislada documentada arriba. Sin cambios en configuración de Nginx/Docker, DEBUG, commit ni push.
+
+## Diseño de la cronología de activos
+
+- La pestaña Cronología muestra una línea vertical con tarjetas de asignaciones, devoluciones y tickets. Las fechas conservan segundos y zona horaria. El historial de auditoría mantiene su acceso separado.
+- Los enlaces de paginación abren la ficha en la pestaña Cronología. Se mantienen la consulta, los permisos y el criterio de fechas operativas.
+- Pasaron las 39 pruebas de inventario en PostgreSQL temporal separado de producción y sin TEST.MIRROR. Chromium verificó la pestaña y la paginación con datos sintéticos a 1440, 768, 390 y 320 px sin desbordamiento ni errores JavaScript.
+- Chequeo de Django correcto y hoja de estilos actualizada servida con HTTP 200.
+
+## Activos por marca y buscador de listados
+
+- Marcas muestra el total de activos visibles y enlaces a los listados filtrados de vigentes y bajas. Cada conteo usa la consulta y los permisos del listado correspondiente.
+- La plantilla compartida del buscador adopta el campo integrado y el botón naranja de ITAM. Conserva los filtros, la ayuda y el conteo de resultados de Django.
+- Pasaron 56 pruebas de inventario e interfaz en PostgreSQL temporal separado de producción y sin TEST.MIRROR. Chromium verificó el envío con filtro y la presentación a 1440, 768, 390 y 320 px con datos sintéticos.

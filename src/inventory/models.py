@@ -33,12 +33,12 @@ class Brand(BaseModel):
 
 class ModelAsset(BaseModel):
     history = HistoricalRecords()
-    brand = models.ForeignKey(Brand, verbose_name='Marca', on_delete=models.PROTECT, related_name='models')
+    brand = models.ForeignKey(Brand, verbose_name='Marca', on_delete=models.PROTECT, related_name='models', null=True, blank=True)
     category = models.ForeignKey(Category, verbose_name='Tipo de activo', on_delete=models.PROTECT, related_name='models', null=True, blank=True)
     name = models.CharField(max_length=100)
 
     def __str__(self):
-        return f"{self.brand.name} {self.name}"
+        return self.name
 
 class AssetStatus(models.TextChoices):
     IN_MAINTENANCE = 'IN_MAINTENANCE', 'En Mantenimiento/Garantía'
@@ -63,7 +63,8 @@ class Asset(BaseModel):
     serial_number = models.CharField('Número de serie', max_length=100, blank=True, null=True)
     
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='assets', verbose_name='Tipo de activo')
-    model = models.ForeignKey(ModelAsset, verbose_name='Marca y modelo', on_delete=models.PROTECT, related_name='assets', null=True, blank=True)
+    brand = models.ForeignKey(Brand, verbose_name='Marca', on_delete=models.PROTECT, related_name='assets', null=True, blank=True)
+    model = models.ForeignKey(ModelAsset, verbose_name='Modelo', on_delete=models.PROTECT, related_name='assets', null=True, blank=True)
     
     company = models.ForeignKey(Company, verbose_name='Compañía administradora', on_delete=models.PROTECT, related_name='assets_managed', help_text="Compañía que lo administra")
     owner_company = models.ForeignKey(Company, verbose_name='Compañía propietaria', on_delete=models.PROTECT, related_name='assets_owned', help_text="Compañía dueña", null=True, blank=True)

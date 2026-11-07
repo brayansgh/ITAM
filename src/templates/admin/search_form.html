@@ -1,0 +1,26 @@
+{% load i18n static %}
+{% if cl.search_fields %}
+<div id="toolbar">
+  <form id="changelist-search" method="get" role="search" aria-label="Buscar en el listado">
+    <div class="itam-list-search-controls">
+      <label for="searchbar" class="visually-hidden">Buscar en el listado</label>
+      <img src="{% static 'admin/img/search.svg' %}" alt="" aria-hidden="true">
+      <input type="search" name="{{ search_var }}" value="{{ cl.query }}" id="searchbar"
+             placeholder="Buscar en el listado…"{% if cl.search_help_text %} aria-describedby="searchbar_helptext"{% endif %}>
+      <button type="submit">{% translate 'Search' %}</button>
+    </div>
+    {% if show_result_count %}
+      <p class="itam-list-search-results">
+        {% blocktranslate count counter=cl.result_count %}{{ counter }} result{% plural %}{{ counter }} results{% endblocktranslate %}
+        · <a href="?{% if cl.is_popup %}{{ is_popup_var }}=1{% if cl.add_facets %}&amp;{% endif %}{% endif %}{% if cl.add_facets %}{{ is_facets_var }}{% endif %}">
+          {% if cl.show_full_result_count %}{% blocktranslate with full_result_count=cl.full_result_count %}{{ full_result_count }} total{% endblocktranslate %}{% else %}{% translate "Show all" %}{% endif %}
+        </a>
+      </p>
+    {% endif %}
+    {% for key, value in cl.params.items %}
+      {% if key != search_var %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}
+    {% endfor %}
+    {% if cl.search_help_text %}<div class="help" id="searchbar_helptext">{{ cl.search_help_text }}</div>{% endif %}
+  </form>
+</div>
+{% endif %}

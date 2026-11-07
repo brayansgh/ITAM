@@ -76,6 +76,26 @@ class CrossModuleAuditTests(TestCase):
                 self.assertContains(response, "Eventos administrativos")
                 self.assertEqual(response.context["audit_counts"]["total"], obj.history.count())
 
+    def test_history_layout_keeps_values_escaped_and_sections_separate(self):
+        self.category.description = '<script>alert("audit")</script>'
+        self.category.save()
+        AssetSpecs.objects.create(asset=self.asset, ram="8 GB")
+        response = self.history(self.category)
+        self.assertContains(response, '&lt;script&gt;')
+        self.assertNotContains(response, '<script>alert("audit")</script>')
+        self.assertContains(response, 'id="audit-data"')
+        self.assertContains(response, 'id="audit-events"')
+        self.assertContains(response, 'Versiones de datos')
+        self.assertContains(response, 'solo lectura')
+        self.assertContains(response, 'itam-audit-old')
+        self.assertContains(response, 'itam-audit-new')
+        self.assertContains(response, 'No se suman ambos conteos')
+        self.assertContains(response, 'Sin responsable registrado')
+        from django.utils import timezone
+        offset = timezone.localtime(self.category.history.first().history_date).strftime('%Z')
+        self.assertContains(response, offset)
+        self.assertContains(self.history(self.asset), 'id="audit-related"')
+
     def test_profile_admin_records_actor_and_exactly_one_admin_event(self):
         url = reverse("admin:inventory_category_change", args=[self.category.pk])
         response = self.client.post(url, {"name": "Categoría nueva", "description": "Actualizada"})

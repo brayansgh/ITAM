@@ -1,14 +1,16 @@
 {% load tz %}
-<table style="width:100%">
-  <thead><tr><th>Fecha / Hora</th><th>Responsable</th><th>Acción</th>{% if related %}<th>Registro relacionado</th>{% endif %}<th>Campo</th><th>Anterior</th><th>Nuevo</th></tr></thead>
+<div class="itam-table-wrap itam-audit-table-wrap" role="region" aria-label="{% if related %}Versiones de registros relacionados{% else %}Versiones del registro{% endif %}" tabindex="0">
+<table class="itam-audit-table">
+  <thead><tr><th scope="col">Fecha / Hora</th><th scope="col">Responsable</th><th scope="col">Acción</th>{% if related %}<th scope="col">Registro relacionado</th>{% endif %}<th scope="col">Campo</th><th scope="col">Anterior</th><th scope="col">Nuevo</th></tr></thead>
   <tbody>
   {% for row in rows %}
     {% if row.changes %}
       {% for change in row.changes %}<tr>
-        {% if forloop.first %}<td rowspan="{{ row.changes|length }}">{{ row.date|localtime|date:"d/m/Y H:i:s" }}</td><td rowspan="{{ row.changes|length }}">{{ row.actor }}</td><td rowspan="{{ row.changes|length }}">{{ row.action }}{% if row.note %}<p class="help">{{ row.note }}</p>{% endif %}</td>{% if related %}<td rowspan="{{ row.changes|length }}">{{ row.entity }}</td>{% endif %}{% endif %}
-        <th>{{ change.field }}</th><td>{{ change.old }}</td><td>{{ change.new }}</td>
+        {% if forloop.first %}<td class="itam-audit-date" rowspan="{{ row.changes|length }}">{{ row.date|localtime|date:"d/m/Y H:i:s T" }}</td><td rowspan="{{ row.changes|length }}">{{ row.actor }}</td><td rowspan="{{ row.changes|length }}"><span class="itam-audit-action {% if row.code == '+' %}itam-audit-created{% elif row.code == '-' %}itam-audit-deleted{% else %}itam-audit-modified{% endif %}">{{ row.action }}</span>{% if row.note %}<p class="itam-note">{{ row.note }}</p>{% endif %}</td>{% if related %}<td rowspan="{{ row.changes|length }}">{{ row.entity }}</td>{% endif %}{% endif %}
+        <th scope="row">{{ change.field }}</th><td class="itam-audit-value itam-audit-old">{{ change.old }}</td><td class="itam-audit-value itam-audit-new">{{ change.new }}</td>
       </tr>{% endfor %}
-    {% else %}<tr><td>{{ row.date|localtime|date:"d/m/Y H:i:s" }}</td><td>{{ row.actor }}</td><td>{{ row.action }}{% if row.note %}<p class="help">{{ row.note }}</p>{% endif %}</td>{% if related %}<td>{{ row.entity }}</td>{% endif %}<td colspan="3">{{ row.detail }}</td></tr>{% endif %}
-  {% empty %}<tr><td colspan="{% if related %}7{% else %}6{% endif %}">No hay versiones registradas. No se reconstruyen cambios anteriores al inicio de la auditoría.</td></tr>{% endfor %}
+    {% else %}<tr><td class="itam-audit-date">{{ row.date|localtime|date:"d/m/Y H:i:s T" }}</td><td>{{ row.actor }}</td><td><span class="itam-audit-action {% if row.code == '+' %}itam-audit-created{% elif row.code == '-' %}itam-audit-deleted{% else %}itam-audit-modified{% endif %}">{{ row.action }}</span>{% if row.note %}<p class="itam-note">{{ row.note }}</p>{% endif %}</td>{% if related %}<td>{{ row.entity }}</td>{% endif %}<td colspan="3" class="itam-audit-value">{{ row.detail }}</td></tr>{% endif %}
+  {% empty %}<tr><td class="itam-audit-empty" colspan="{% if related %}7{% else %}6{% endif %}">No hay versiones registradas. No se reconstruyen cambios anteriores al inicio de la auditoría.</td></tr>{% endfor %}
   </tbody>
 </table>
+</div>

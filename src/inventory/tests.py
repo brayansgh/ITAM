@@ -189,6 +189,9 @@ class AssetCardTests(TestCase):
             return_assignment(assignment_id=assignment.pk, condition="Recibido")
         first = self.client.get(self.url())
         second = self.client.get(self.url(), {"timeline_page": 2})
+        self.assertContains(first, '?timeline_page=2#asset-timeline')
+        self.assertContains(second, 'data-itam-tab="asset-timeline" aria-selected="true"')
+        self.assertContains(second, 'data-itam-tab="asset-summary" aria-selected="false"')
         a, b = first.context["asset_timeline"], second.context["asset_timeline"]
         self.assertEqual(a["page"].paginator.count, 28)
         self.assertEqual(len(a["rows"]), 25)

@@ -10,8 +10,16 @@ class DuplicatePlateTransitionTests(TransactionTestCase):
     def test_authorized_cleanup_preserves_frozen_asset_and_audits_only_actual_changes(self):
         executor = MigrationExecutor(connection)
         old_target = [('inventory', '0007_estandarizar_auditoria')]
-        new_target = [('inventory', '0009_etiquetas_en_espanol')]
+        new_target = [('inventory', '0011_conservar_marcas_legadas')]
         executor.migrate(old_target)
+        old_apps = executor.loader.project_state(old_target).apps
+        old_asset = old_apps.get_model('inventory', 'Asset')
+        old_history = old_apps.get_model('inventory', 'HistoricalAsset')
+        # El comando actual requiere las columnas nuevas; la restricción de placa
+        # sigue siendo la antigua y la migración real se ejecuta al final.
+        with connection.schema_editor() as editor:
+            editor.add_field(old_asset, Asset._meta.get_field('brand'))
+            editor.add_field(old_history, Asset.history.model._meta.get_field('brand'))
         try:
             apps = executor.loader.project_state(old_target).apps
             Company = apps.get_model('organizations', 'Company')
@@ -37,4 +45,7 @@ class DuplicatePlateTransitionTests(TransactionTestCase):
             self.assertEqual(updated.history.count(), 1)
         finally:
             OldAsset.objects.filter(legacy_asset_tag='PL-DUP').exclude(pk=frozen.pk).update(legacy_asset_tag=None)
+            with connection.schema_editor() as editor:
+                editor.remove_field(old_asset, Asset._meta.get_field('brand'))
+                editor.remove_field(old_history, Asset.history.model._meta.get_field('brand'))
             MigrationExecutor(connection).migrate(new_target)

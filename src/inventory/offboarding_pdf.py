@@ -16,7 +16,7 @@ def generate_and_save_offboarding_pdf(record):
     # Obtener exclusivamente los activos de esta acta.
     items = record.items.select_related(
         "assignment__asset__category",
-        "assignment__asset__model__brand",
+        "assignment__asset__brand",
     ).all()
 
     # Adaptar los datos al formato que espera la plantilla.

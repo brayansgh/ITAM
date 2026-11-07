@@ -1,0 +1,5 @@
+{% extends 'admin/change_form.html' %}
+{% block bodyclass %}{{ block.super }} itam-change-form{% endblock %}
+{% block content_title %}
+<div class="itam-page-heading"><div><h1>{{ title }}</h1><p>{% if add %}Completa la información del nuevo registro. Los campos con * son obligatorios.{% elif has_change_permission %}Actualiza la información y guarda los cambios al finalizar. Los campos con * son obligatorios.{% else %}Consulta la información registrada.{% endif %}</p></div><span class="itam-label">{% if add %}Nuevo registro{% elif has_change_permission %}Edición{% else %}Solo consulta{% endif %}</span></div>
+{% endblock %}
