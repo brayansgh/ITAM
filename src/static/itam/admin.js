@@ -15,6 +15,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-itam-tab]').forEach(tab => tab.setAttribute('aria-selected', String(tab === button)));
     document.querySelectorAll('[data-itam-panel]').forEach(panel => { panel.hidden = panel.id !== button.dataset.itamTab; });
   }));
+  const returnPdfKey = 'itam-return-pdf';
+  const pendingPdfTab = sessionStorage.getItem(returnPdfKey);
+  if (pendingPdfTab) {
+    sessionStorage.removeItem(returnPdfKey);
+    const pdfLink = document.querySelector('[data-itam-return-pdf]');
+    const tab = window.open(pdfLink?.href || '', pendingPdfTab);
+    if (tab && !pdfLink) tab.close();
+  }
   const tokenEndpoint = document.querySelector('meta[name="itam-form-token-url"]')?.content;
   document.querySelectorAll('form').forEach(form => {
     const trackChanges = ['asset_form', 'employee_form', 'maintenancerecord_form'].includes(form.id);
@@ -36,11 +44,21 @@ document.addEventListener('DOMContentLoaded', () => {
       if (refreshed) { refreshed = false; changed = false; return; }
       if (refreshing) { event.preventDefault(); return; }
       const status = form.querySelector('#id_status');
-      if (status && form.id === 'maintenancerecord_form' && ['COMPLETED', 'CANCELLED'].includes(status.value)) {
+      const completingDecommission = status?.value === 'COMPLETED' && form.querySelector('[data-itam-decommission]');
+      if (status && form.id === 'maintenancerecord_form' && !completingDecommission && ['COMPLETED', 'CANCELLED'].includes(status.value)) {
         const message = status.value === 'CANCELLED'
           ? '¿Cancelar el ticket? Sus datos y evidencias quedarán de solo consulta.'
           : '¿Completar el ticket? Sus datos y evidencias quedarán de solo consulta. Si es una baja, el activo quedará dado de baja.';
         if (!window.confirm(message)) { event.preventDefault(); return; }
+      }
+      let returnTab;
+      if (form.hasAttribute('data-itam-return-form')) {
+        const name = 'itam-return-' + Date.now();
+        returnTab = window.open('', name);
+        if (returnTab) {
+          returnTab.document.body.textContent = 'Generando el acta de devolución…';
+          sessionStorage.setItem(returnPdfKey, name);
+        }
       }
       const tokens = form.querySelectorAll('input[name="csrfmiddlewaretoken"]');
       if (!tokenEndpoint || form.method.toLowerCase() !== 'post' || !tokens.length || new URL(form.action, location.href).origin !== location.origin) {
@@ -75,6 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
         window.clearTimeout(timeout);
         refreshing = false;
         form.removeAttribute('aria-busy');
+        if (!ready && returnTab) {
+          returnTab.close();
+          sessionStorage.removeItem(returnPdfKey);
+        }
       }
       if (ready) {
         refreshed = true;

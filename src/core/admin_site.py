@@ -26,6 +26,8 @@ class ITAMAdminSite(AdminSite):
             path('token-formulario/', self.admin_view(self.form_token), name='itam_form_token'),
             path('buscar/', self.admin_view(self.search), name='itam_search'),
             path('documentos/', self.admin_view(self.documents), name='itam_documents'),
+            path('bajas/nueva/', self.admin_view(self.decommission_add), name='maintenance_decommission_add'),
+            path('bajas/<uuid:object_id>/', self.admin_view(self.decommission_change), name='maintenance_decommission_change'),
             path('bajas/', self.admin_view(self.decommissions), name='itam_decommissions'),
             path('auditoria/', self.admin_view(self.audit_catalog), name='itam_audit'),
         ] + super().get_urls()
@@ -42,6 +44,19 @@ class ITAMAdminSite(AdminSite):
         if not (model_admin.has_module_permission(request) and model_admin.has_view_permission(request)):
             return model_admin.get_queryset(request).none()
         return model_admin.get_queryset(request)
+
+    def get_app_list(self, request, app_label=None):
+        apps = super().get_app_list(request, app_label)
+        labels = {
+            "accounts": "Administración",
+            "assignments": "Movimientos",
+            "data_imports": "Importaciones",
+            "employees": "Personas",
+            "organizations": "Organización",
+        }
+        for app in apps:
+            app["name"] = labels.get(app["app_label"], app["name"])
+        return sorted(apps, key=lambda app: app["name"].lower())
 
     def each_context(self, request):
         context = super().each_context(request)
@@ -66,7 +81,9 @@ class ITAMAdminSite(AdminSite):
                 menu.append({'label': label, 'links': links})
         if any(k in available for k in ('assignments.assignment', 'assignments.offboardingrecord', 'maintenance.maintenancerecord')):
             menu.insert(min(3, len(menu)), {'label': 'Documentación', 'links': [{'label': 'Documentos y actas', 'icon': '📄', 'url': reverse('admin:itam_documents')}]})
-        context.update(itam_menu=menu, itam_now=timezone.now())
+        model_labels = {key: title for _, models in groups for key, title in models}
+        model_labels["inventory.decommissionedasset"] = "Bajas"
+        context.update(itam_menu=menu, itam_model_labels=model_labels, itam_now=timezone.now())
         return context
 
     def page(self, request, template, title, **context):
@@ -170,11 +187,11 @@ class ITAMAdminSite(AdminSite):
 
     def documents(self, request):
         from assignments.models import Assignment, OffboardingRecord
-        from maintenance.models import MaintenanceDocument, MaintenanceRecord
+        from maintenance.models import MaintenanceDocument, MaintenanceRecord, MaintenanceType
         kind = request.GET.get('tipo', 'entrega')
-        if kind not in ('entrega', 'devolucion', 'mantenimiento'):
+        if kind not in ('entrega', 'devolucion', 'mantenimiento', 'baja'):
             kind = 'entrega'
-        config = {'entrega': (Assignment, 'signed_act_pdf'), 'devolucion': (OffboardingRecord, 'pdf'), 'mantenimiento': (MaintenanceRecord, None)}
+        config = {'entrega': (Assignment, 'signed_act_pdf'), 'devolucion': (OffboardingRecord, 'pdf'), 'mantenimiento': (MaintenanceRecord, None), 'baja': (MaintenanceRecord, None)}
         model, field = config[kind]
         ma = self._registry[model]
         if not ma.has_view_permission(request) or not ma.has_module_permission(request):
@@ -192,6 +209,10 @@ class ITAMAdminSite(AdminSite):
                 *(['asset', 'employee'] if kind == 'entrega' else ['employee'])
             ).order_by('-created_at')
         else:
+            if kind == 'baja':
+                qs = qs.filter(type=MaintenanceType.DECOMMISSION)
+            else:
+                qs = qs.exclude(type=MaintenanceType.DECOMMISSION)
             qs = MaintenanceDocument.objects.filter(maintenance__in=qs).select_related('maintenance__asset').order_by('-pk')
         from django.utils.dateparse import parse_date
         for param, lookup in [('desde', 'gte'), ('hasta', 'lte')]:
@@ -214,12 +235,22 @@ class ITAMAdminSite(AdminSite):
                 url, label = reverse('admin:assignments_offboardingrecord_view_pdf', args=[obj.pk]), str(obj.employee)
             else:
                 url, label = reverse('admin:maintenance_document_download', args=[obj.pk]), str(obj.maintenance.asset)
-            rows.append({'date': record.created_at, 'label': label, 'url': url,
+            detail_url = (reverse('admin:assignments_offboardingrecord_receipt', args=[obj.pk])
+                          if kind == 'devolucion' else None)
+            rows.append({'date': record.created_at, 'label': label, 'url': url, 'detail_url': detail_url,
                          'document_type': {'entrega': 'Entrega', 'devolucion': 'Devolución',
-                                           'mantenimiento': 'Mantenimiento / baja'}[kind],
+                                           'mantenimiento': 'Mantenimiento', 'baja': 'Baja'}[kind],
                          'employee': obj.employee.full_name if field else 'No aplica'})
-        tabs = [{'label': label, 'url': '?tipo=' + key, 'active': key == kind} for key, label in [('entrega', 'Entrega'), ('devolucion', 'Devolución'), ('mantenimiento', 'Mantenimiento y bajas')] if self._registry[config[key][0]].has_view_permission(request) and self._registry[config[key][0]].has_module_permission(request)]
+        tabs = [{'label': label, 'url': '?tipo=' + key, 'active': key == kind} for key, label in [('entrega', 'Entrega'), ('devolucion', 'Devolución'), ('mantenimiento', 'Mantenimiento'), ('baja', 'Bajas')] if self._registry[config[key][0]].has_view_permission(request) and self._registry[config[key][0]].has_module_permission(request)]
         return self.page(request, 'admin/itam/documents.html', 'Documentos y actas', rows=rows, tabs=tabs, page=page, kind=kind)
+
+    def decommission_add(self, request):
+        from maintenance.models import MaintenanceRecord
+        return self._registry[MaintenanceRecord].add_view(request)
+
+    def decommission_change(self, request, object_id):
+        from maintenance.models import MaintenanceRecord
+        return self._registry[MaintenanceRecord].decommission_change_view(request, object_id)
 
     def decommissions(self, request):
         from inventory.models import DecommissionedAsset
@@ -242,7 +273,7 @@ class ITAMAdminSite(AdminSite):
         for obj in page:
             if ma.has_view_permission(request, obj):
                 asset = obj if kind == 'definitivas' else obj.asset
-                route = 'inventory_decommissionedasset' if kind == 'definitivas' else 'maintenance_maintenancerecord'
+                route = 'inventory_decommissionedasset' if kind == 'definitivas' else 'maintenance_decommission'
                 rows.append({'asset': asset, 'status': obj.get_status_display(), 'date': obj.created_at, 'url': reverse('admin:' + route + '_change', args=[obj.pk])})
         can_create = self._registry[MaintenanceRecord].has_add_permission(request)
         tabs = [{'label': label, 'url': '?estado=' + key, 'active': kind == key} for key, label in [('tramite', 'En trámite'), ('definitivas', 'Bajas definitivas'), ('cancelados', 'Cancelados')] if self._registry[DecommissionedAsset if key == 'definitivas' else MaintenanceRecord].has_view_permission(request)]

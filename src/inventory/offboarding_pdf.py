@@ -17,6 +17,7 @@ def generate_and_save_offboarding_pdf(record):
     items = record.items.select_related(
         "assignment__asset__category",
         "assignment__asset__brand",
+        "assignment__asset__model",
     ).all()
 
     # Adaptar los datos al formato que espera la plantilla.
@@ -111,7 +112,7 @@ def generate_and_save_offboarding_pdf(record):
     pdf_data = buffer.getvalue()
 
     # Crear nombre único para cada acta.
-    doc_num = employee.document_number or str(employee.pk)
+    doc_num = str(record.pk) if record.return_reason else (employee.document_number or str(employee.pk))
 
     filename = (
         f"Acta_Devolucion_{doc_num}_{record.pk}.pdf"

@@ -10,6 +10,17 @@ def validate_ticket(ticket, using, previous=None, asset=None):
         raise ValidationError("El ticket está cerrado y solo permite consulta.")
     if previous and previous.asset_id != ticket.asset_id:
         raise ValidationError({"asset": "No se puede trasladar un ticket existente a otro activo."})
+    if previous and previous.return_item_id and previous.return_item_id != ticket.return_item_id:
+        raise ValidationError("No se puede sustituir ni retirar el acta vinculada al ticket.")
+    if ticket.return_item_id:
+        item = ticket.return_item
+        if (
+            ticket.type != MaintenanceType.DECOMMISSION
+            or item.assignment.asset_id != ticket.asset_id
+            or item.assignment.status != "RETURNED"
+            or not item.offboarding_record.return_reason
+        ):
+            raise ValidationError("El acta de origen debe corresponder a una devolución registrada para este activo.")
     from inventory.models import Asset, AssetStatus
     asset = asset or Asset.objects.using(using).filter(pk=ticket.asset_id).first()
     if asset is None:

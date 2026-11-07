@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+{% block bodyclass %}{{ block.super }} itam-change-form{% endblock %}
+{% block content_title %}
+<div class="itam-page-heading"><div><h1>{{ title }}</h1><p>{{ employee.full_name }} · {{ employee.company }}</p></div></div>
+{% endblock %}
+{% block content %}
+<p class="itam-notice">Selecciona los activos recibidos con el mismo motivo y condición. Se generará una sola acta con todos los activos seleccionados.</p>
+{% if has_assignments %}
+<form method="post" data-itam-return-form>
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  <fieldset class="module aligned">
+    <h2>Recepción de activos</h2>
+    {% for field in form %}
+      <div class="form-row">
+        {{ field.errors }}
+        {{ field.label_tag }}
+        {{ field }}
+        {% if field.name == 'request_decommission' %}<p class="help">Vincula un trámite por activo. Su cierre se realiza desde Bajas.</p>{% endif %}
+      </div>
+    {% endfor %}
+  </fieldset>
+  <div class="submit-row">
+    <input type="submit" value="Registrar devolución" class="default">
+    <a class="closelink" href="{% url 'admin:employees_employee_change' employee.pk %}">Cancelar</a>
+  </div>
+</form>
+{% else %}
+<section class="itam-panel"><p>Este empleado no tiene activos vigentes para devolver.</p><a href="{% url 'admin:employees_employee_change' employee.pk %}">Volver al empleado</a></section>
+{% endif %}
+{% endblock %}

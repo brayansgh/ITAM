@@ -128,6 +128,13 @@ class EmployeeAssetSummary(Employee):
 
 
 # Modelo para actas de devolución
+class ReturnReason(models.TextChoices):
+    OBSOLESCENCE = "OBSOLESCENCE", "Obsolescencia"
+    DAMAGE = "DAMAGE", "Daño"
+    REPLACEMENT = "REPLACEMENT", "Cambio de activo"
+    OTHER = "OTHER", "Otro motivo"
+
+
 class OffboardingRecord(BaseModel):
     history = HistoricalRecords()
     employee = models.ForeignKey(
@@ -142,6 +149,10 @@ class OffboardingRecord(BaseModel):
         on_delete=models.PROTECT,
         related_name="received_offboarding_records",
         verbose_name="Recibido por",
+    )
+
+    return_reason = models.CharField(
+        "Motivo de devolución", max_length=20, choices=ReturnReason.choices, blank=True,
     )
 
     observations = models.TextField(

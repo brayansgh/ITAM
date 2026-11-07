@@ -11,6 +11,13 @@ class MaintenanceType(models.TextChoices):
     WARRANTY = 'WARRANTY', 'Garantía'
     DECOMMISSION = 'DECOMMISSION', 'Baja Definitiva (Desecho/Pérdida/Obsolescencia)'
 
+class DecommissionReason(models.TextChoices):
+    LOSS = "LOSS", "Pérdida"
+    OBSOLESCENCE = "OBSOLESCENCE", "Obsolescencia"
+    DAMAGE = "DAMAGE", "Daño"
+    OTHER = "OTHER", "Otro motivo"
+
+
 class MaintenanceStatus(models.TextChoices):
     OPEN = 'OPEN', 'Abierto / En Diagnóstico'
     IN_PROGRESS = 'IN_PROGRESS', 'En Proceso / Con Proveedor'
@@ -20,8 +27,15 @@ class MaintenanceStatus(models.TextChoices):
 class MaintenanceRecord(BaseModel):
     history = HistoricalRecords()
     asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name='maintenances', verbose_name="Activo Tecnológico")
+    return_item = models.ForeignKey(
+        "assignments.OffboardingRecordItem", verbose_name="Devolución de origen",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="decommission_tickets",
+    )
     type = models.CharField(max_length=20, choices=MaintenanceType.choices, verbose_name="Tipo de Evento")
     status = models.CharField(max_length=20, choices=MaintenanceStatus.choices, default=MaintenanceStatus.OPEN, verbose_name="Estado del Ticket")
+    decommission_reason = models.CharField(
+        "Motivo de baja", max_length=20, choices=DecommissionReason.choices, blank=True,
+    )
     description = models.TextField(verbose_name="Descripción del Problema o Motivo")
     reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="Reportado/Gestionado por")
     provider = models.CharField(max_length=150, blank=True, null=True, verbose_name="Proveedor o Técnico Externo")

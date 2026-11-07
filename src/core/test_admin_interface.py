@@ -27,6 +27,49 @@ class CorporateAdminTests(TestCase):
                 self.assertContains(response, 'img/palma.png')
                 self.assertContains(response, 'itam/admin.css')
 
+    def test_breadcrumbs_use_current_navigation_labels(self):
+        import re
+        from django.utils.html import strip_tags
+
+        cases = [
+            ('assignments_assignment_changelist', [], 'Inicio › Historial de asignaciones'),
+            ('employees_employee_changelist', [], 'Inicio › Empleados'),
+            ('assignments_employeeassetsummary_changelist', [], 'Inicio › Resumen por usuarios'),
+            ('maintenance_maintenancerecord_changelist', [], 'Inicio › Mantenimiento'),
+            ('maintenance_decommission_add', [], 'Inicio › Bajas › Iniciar trámite de baja'),
+            ('inventory_asset_change', [self.asset.pk], f'Inicio › Inventario de activos › {self.asset}'),
+            ('itam_documents', [], 'Inicio › Documentos y actas'),
+        ]
+        for route, args, expected in cases:
+            with self.subTest(route=route):
+                response = self.client.get(reverse('admin:' + route, args=args))
+                html = response.content.decode()
+                trail = re.search(r'<div class="breadcrumbs">(.*?)</div>', html, re.S)
+                self.assertIsNotNone(trail)
+                self.assertEqual(' '.join(strip_tags(trail[1]).split()), expected)
+        self.assertNotContains(self.client.get(reverse('admin:index')), 'class="breadcrumbs"')
+        app = self.client.get(reverse('admin:app_list', kwargs={'app_label': 'employees'}))
+        self.assertContains(app, 'Personas')
+        trail = re.search(r'<div class="breadcrumbs">(.*?)</div>', app.content.decode(), re.S)
+        self.assertIsNotNone(trail)
+        self.assertNotIn('Employees', trail[1])
+
+    def test_employee_admin_displays_spanish_labels_and_save_message(self):
+        listing = reverse('admin:employees_employee_changelist')
+        response = self.client.get(listing)
+        for label in ('Empleados', 'Añadir empleado', 'Nombre completo', 'Tipo de documento',
+                      'Compañía', 'Ubicación física', 'Área', 'Estado', 'Fecha de registro'):
+            self.assertContains(response, label)
+        self.assertNotContains(response, 'Full name')
+
+        response = self.client.post(reverse('admin:employees_employee_change', args=[self.employee.pk]), {
+            'full_name': 'Empleado sintético editado', 'document_type': 'CC',
+            'company': self.company.pk, 'status': 'ACTIVE', '_save': 'Guardar',
+        }, follow=True)
+        self.assertRedirects(response, listing)
+        self.assertContains(response, 'El empleado')
+        self.assertContains(response, 'se cambió correctamente')
+
     def test_forms_offer_only_the_standard_save_action(self):
         for model in ['inventory_category', 'inventory_brand', 'inventory_asset',
                       'employees_employee', 'organizations_company',
@@ -120,7 +163,7 @@ class CorporateAdminTests(TestCase):
         for kind, label, employee, url in [
             ('entrega', 'Entrega', self.employee.full_name, reverse('download_act_pdf', args=[assignment.pk])),
             ('devolucion', 'Devolución', self.employee.full_name, reverse('admin:assignments_offboardingrecord_view_pdf', args=[returned.pk])),
-            ('mantenimiento', 'Mantenimiento / baja', 'No aplica', reverse('admin:maintenance_document_download', args=[document.pk])),
+            ('mantenimiento', 'Mantenimiento', 'No aplica', reverse('admin:maintenance_document_download', args=[document.pk])),
         ]:
             with self.subTest(kind=kind):
                 response = self.client.get(reverse('admin:itam_documents'), {'tipo': kind})

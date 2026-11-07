@@ -110,7 +110,7 @@
             </td>
 
             <th class="text-center" width="50%">
-                CONTROL Y ENTREGA DE ACTIVOS TECNOLÓGICOS
+                {% if record.return_reason %}ACTA DE DEVOLUCIÓN DE ACTIVOS{% else %}CONTROL Y ENTREGA DE ACTIVOS TECNOLÓGICOS{% endif %}
             </th>
 
             <td class="text-center" width="25%">
@@ -229,6 +229,9 @@
         </tr>
     </table>
 
+    {% if record.return_reason %}
+    <p><strong>Motivo de devolución:</strong> {{ record.get_return_reason_display }}</p>
+    {% else %}
     <!-- CHECKLIST DE DESVINCULACIÓN -->
     <div class="policies">
 
@@ -251,6 +254,8 @@
 
         </table>
     </div>
+
+    {% endif %}
 
     <!-- FIRMAS Y OBSERVACIONES GENERALES -->
     <table class="signature-table">
@@ -278,7 +283,7 @@
                 C.C. {{ employee.document_number|default:"N/A" }}
             </td>
 
-            <td rowspan="3" class="general-observations">
+            <td{% if not record.return_reason %} rowspan="3"{% endif %} class="general-observations">
                 {{ observations|default:"Sin observaciones"|linebreaksbr }}
             </td>
 
@@ -292,6 +297,7 @@
             </td>
         </tr>
 
+        {% if not record.return_reason %}
         <tr>
             <td class="signature-title"
                 style="border: none; background-color: transparent;">
@@ -313,6 +319,7 @@
             </td>
         </tr>
 
+        {% endif %}
     </table>
 
 </body>

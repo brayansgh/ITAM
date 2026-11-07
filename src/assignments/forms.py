@@ -2,6 +2,8 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.forms import formset_factory
 
+from .models import ReturnReason
+
 
 class OffboardingForm(forms.Form):
     observations = forms.CharField(
@@ -61,3 +63,19 @@ OffboardingItemFormSet = formset_factory(
     OffboardingItemForm,
     extra=0
 )
+
+
+
+class ActiveReturnForm(forms.Form):
+    assignments = forms.ModelMultipleChoiceField(queryset=None, label="Activos que se reciben", widget=forms.CheckboxSelectMultiple)
+    reason = forms.ChoiceField(label="Motivo de devolución", choices=[("", "Selecciona un motivo"), *ReturnReason.choices])
+    condition = forms.CharField(label="Condición al recibir", widget=forms.Textarea(attrs={"rows": 3}))
+    observations = forms.CharField(label="Observaciones", required=False, widget=forms.Textarea(attrs={"rows": 3}))
+    request_decommission = forms.BooleanField(label="Tramitar la baja de los activos seleccionados", required=False)
+
+    def __init__(self, *args, assignments, can_request_decommission, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["assignments"].queryset = assignments
+        self.fields["assignments"].label_from_instance = lambda assignment: str(assignment.asset)
+        if not can_request_decommission:
+            del self.fields["request_decommission"]
