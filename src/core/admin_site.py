@@ -23,11 +23,19 @@ class ITAMAdminSite(AdminSite):
 
     def get_urls(self):
         return [
+            path('token-formulario/', self.admin_view(self.form_token), name='itam_form_token'),
             path('buscar/', self.admin_view(self.search), name='itam_search'),
             path('documentos/', self.admin_view(self.documents), name='itam_documents'),
             path('bajas/', self.admin_view(self.decommissions), name='itam_decommissions'),
             path('auditoria/', self.admin_view(self.audit_catalog), name='itam_audit'),
         ] + super().get_urls()
+
+    def form_token(self, request):
+        from django.http import JsonResponse, HttpResponseNotAllowed
+        from django.middleware.csrf import get_token
+        if request.method != 'GET':
+            return HttpResponseNotAllowed(['GET'])
+        return JsonResponse({'csrfToken': get_token(request)})
 
     def visible_queryset(self, request, model):
         model_admin = self._registry[model]
@@ -180,7 +188,9 @@ class ITAMAdminSite(AdminSite):
             raise PermissionDenied
         qs = self.visible_queryset(request, model)
         if field:
-            qs = qs.exclude(**{field: ''}).exclude(**{field + '__isnull': True}).order_by('-created_at')
+            qs = qs.exclude(**{field: ''}).exclude(**{field + '__isnull': True}).select_related(
+                *(['asset', 'employee'] if kind == 'entrega' else ['employee'])
+            ).order_by('-created_at')
         else:
             qs = MaintenanceDocument.objects.filter(maintenance__in=qs).select_related('maintenance__asset').order_by('-pk')
         from django.utils.dateparse import parse_date
@@ -204,7 +214,10 @@ class ITAMAdminSite(AdminSite):
                 url, label = reverse('admin:assignments_offboardingrecord_view_pdf', args=[obj.pk]), str(obj.employee)
             else:
                 url, label = reverse('admin:maintenance_document_download', args=[obj.pk]), str(obj.maintenance.asset)
-            rows.append({'date': record.created_at, 'label': label, 'url': url})
+            rows.append({'date': record.created_at, 'label': label, 'url': url,
+                         'document_type': {'entrega': 'Entrega', 'devolucion': 'Devolución',
+                                           'mantenimiento': 'Mantenimiento / baja'}[kind],
+                         'employee': obj.employee.full_name if field else 'No aplica'})
         tabs = [{'label': label, 'url': '?tipo=' + key, 'active': key == kind} for key, label in [('entrega', 'Entrega'), ('devolucion', 'Devolución'), ('mantenimiento', 'Mantenimiento y bajas')] if self._registry[config[key][0]].has_view_permission(request) and self._registry[config[key][0]].has_module_permission(request)]
         return self.page(request, 'admin/itam/documents.html', 'Documentos y actas', rows=rows, tabs=tabs, page=page, kind=kind)
 
@@ -237,8 +250,15 @@ class ITAMAdminSite(AdminSite):
 
     def audit_catalog(self, request):
         links = []
+        groups = []
+        icons = {'inventory': '💻', 'assignments': '🔄', 'maintenance': '🔧',
+                 'employees': '👥', 'organizations': '🏢', 'accounts': '🔐',
+                 'auth': '🔐', 'data_imports': '📥'}
         for app in self.get_app_list(request):
-            for model in app['models']:
-                if model.get('admin_url'):
-                    links.append({'label': model['name'], 'url': model['admin_url']})
-        return self.page(request, 'admin/itam/audit.html', 'Auditoría', links=links)
+            app_links = [{'label': model['name'], 'url': model['admin_url']}
+                         for model in app['models'] if model.get('admin_url')]
+            if app_links:
+                groups.append({'label': app['name'], 'links': app_links,
+                               'icon': icons.get(app['app_label'], '📋')})
+                links.extend(app_links)
+        return self.page(request, 'admin/itam/audit.html', 'Auditoría', links=links, audit_groups=groups)

@@ -61,7 +61,7 @@ class Command(BaseCommand):
                     if cat is None:
                         raise CommandError('El elemento del lote debe coincidir con un tipo de activo clasificado. Revisa el catálogo antes de importar.')
                     brand, _ = Brand.objects.get_or_create(name=stg.brand or 'Genérica')
-                    model_obj, _ = ModelAsset.objects.get_or_create(name=stg.model or 'Genérico', brand=brand, category=cat)
+                    model_obj, _ = ModelAsset.objects.get_or_create(name=stg.model or 'Genérico', brand=None, category=None)
                     
                     # 4. Generación del Código Interno
                     
@@ -72,6 +72,7 @@ class Command(BaseCommand):
                         serial_number=stg.serial_number,
                         category=cat,
                         model=model_obj,
+                        brand=brand,
                         company=comp,
                         site=site,
                         status='ASSIGNED' if stg.employee_name else 'AVAILABLE',

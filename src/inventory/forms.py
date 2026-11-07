@@ -40,9 +40,4 @@ class AssetRegistrationForm(forms.ModelForm):
             self.add_error('category', 'El tipo de activo no pertenece al grupo elegido.')
         if category and not category.group and self.instance._state.adding:
             self.add_error('category', 'Selecciona un tipo de activo clasificado por grupo.')
-        model = data.get('model')
-        if category and model and model.category_id and model.category_id != category.pk:
-            previous = Asset.objects.filter(pk=self.instance.pk).values('category_id', 'model_id').first()
-            if not previous or previous['category_id'] != category.pk or previous['model_id'] != model.pk:
-                self.add_error('model', 'El modelo debe corresponder al tipo de activo seleccionado.')
         return data

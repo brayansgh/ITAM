@@ -70,3 +70,312 @@ a.button:hover,a.button:focus,input[type=submit]:hover,input[type=button]:hover,
 .itam-asset-form .object-tools{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px;float:none;margin:0 0 18px;padding:0}
 .itam-asset-form .object-tools li{float:none;height:auto;margin:0;padding:0}
 .itam-asset-form .object-tools a{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px 14px;line-height:1.4;font-size:14px;text-transform:none;border-radius:6px}
+
+/* Auditoría: misma paleta, paneles y ritmo visual que el resto del Admin. */
+.itam-audit-layout{display:grid;gap:20px;min-width:0}
+.itam-audit-intro{display:flex;align-items:flex-start;gap:14px;margin:0;line-height:1.6}
+.itam-audit-intro p{margin:4px 0 0;font-size:14px}
+.itam-audit-intro-icon{font-size:24px;flex:0 0 32px;text-align:center}
+.itam-audit-section-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+.itam-audit-section-heading h2{margin:0!important}
+.itam-audit-section-heading .itam-note{margin:0}
+.itam-audit-modules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.itam-audit-module{display:flex;align-items:center;gap:12px;padding:16px;border:1px solid #d5dfe6;border-radius:8px;background:#fff;color:#003366!important;min-width:0;transition:border-color .15s,background .15s}
+.itam-audit-module:hover{border-color:#f37035;background:#fff8f3}
+.itam-audit-module>span:nth-child(2){min-width:0;overflow-wrap:anywhere}
+.itam-audit-module strong{display:block;font-size:15px;line-height:1.4}
+.itam-audit-module small{display:block;margin-top:5px;font-size:13px;color:#596875;line-height:1.4}
+.itam-audit-module-icon{display:grid;place-items:center;flex:0 0 40px;height:40px;border-radius:8px;background:#e8f2f8;font-size:21px}
+.itam-audit-arrow{margin-left:auto;color:#f37035;font-size:22px}
+.itam-audit-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0}
+.itam-audit-summary>div{display:flex;flex-direction:column-reverse;align-items:flex-start;gap:7px;padding:18px 20px;background:#fff;border:1px solid #dbe3e9;border-top:3px solid #003366;border-radius:10px;box-shadow:0 2px 3px #20334206}
+.itam-audit-summary>div:nth-child(3){border-top-color:#f37035}
+.itam-audit-summary dt{font-size:14px;color:#596875;line-height:1.4}
+.itam-audit-summary dd{margin:0;font-size:30px;font-weight:700;line-height:1.2;color:#003366}
+.itam-audit-sections{margin:0;flex-wrap:wrap;gap:10px 24px}
+.itam-audit-sections a{border-bottom-color:#f37035;color:#003366}
+.itam-audit-section{scroll-margin-top:20px}
+.itam-audit-table-wrap{max-width:100%;border:1px solid #dbe3e9;border-radius:8px;overscroll-behavior-x:contain}
+.itam-audit-table{min-width:850px;border-collapse:collapse}
+.itam-audit-table th,.itam-audit-table td{border-bottom:1px solid #e4ebef;vertical-align:top!important;line-height:1.5;overflow-wrap:anywhere}
+.itam-audit-table thead th{font-weight:600;color:#003366;white-space:nowrap}
+.itam-audit-table tbody th{background:#fafcfd;font-weight:600;min-width:130px}
+.itam-audit-table .itam-audit-date{white-space:nowrap;font-variant-numeric:tabular-nums}
+.itam-audit-table .itam-audit-value{min-width:180px;max-width:340px;white-space:pre-wrap}
+.itam-audit-table .itam-audit-old{background:#fff9f4}
+.itam-audit-table .itam-audit-new{background:#f0f7fc}
+.itam-audit-table .itam-audit-empty{padding:24px;color:#596875;white-space:normal}
+.itam-audit-action{display:inline-block;padding:4px 9px;border-radius:20px;font-size:13px;font-weight:600;white-space:nowrap}
+.itam-audit-created{background:#e8f2f8;color:#003366}
+.itam-audit-modified{background:#fff0e5;color:#924019}
+.itam-audit-deleted{background:#fbe9e7;color:#a33d32}
+.itam-audit-pagination{margin:16px 0 0;padding:0;justify-content:flex-end;color:#596875;font-size:14px}
+.itam-audit-pagination a{display:inline-flex;align-items:center;min-height:36px;padding:6px 12px;border:1px solid #d5dfe6;border-radius:6px;background:#fff;color:#003366}
+.itam-audit-pagination a:hover{border-color:#f37035}
+@media(max-width:1100px){.itam-audit-modules{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:767px){.itam-audit-modules{grid-template-columns:1fr}.itam-audit-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.itam-audit-summary>div{padding:14px}.itam-audit-summary dd{font-size:26px}.itam-audit-module{padding:14px}.itam-audit-pagination{justify-content:flex-start}}
+
+/* Formularios compartidos: tarjetas, etiquetas superiores y controles uniformes. */
+.itam-change-form #content-main{min-width:0}
+.itam-change-form #content .object-tools{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px;float:none;margin:0 0 20px;padding:0}
+.itam-change-form #content .object-tools li{float:none;height:auto;margin:0;padding:0}
+.itam-change-form #content .object-tools a{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px 14px;line-height:1.4;font-size:14px;text-transform:none}
+.itam-change-form #content fieldset.module.aligned{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0 0 22px;padding:0;background:#fff;border:1px solid #dbe3e9;border-radius:10px;box-shadow:0 2px 3px #20334206;min-width:0;overflow:visible}
+.itam-change-form #content fieldset.module.aligned>h2,.itam-change-form #content fieldset.module.aligned>.description{grid-column:1/-1}
+.itam-change-form #content fieldset.module h2,.itam-change-form #content .inline-group h2{margin:0;padding:17px 20px;background:#fff;color:#003366;border-bottom:1px solid #e4ebef;border-left:4px solid #f37035;border-radius:9px 9px 0 0;font-size:17px;font-weight:600;line-height:1.4}
+.itam-change-form #content .aligned .description{padding:14px 20px;margin:0;color:#596875;font-size:14px;line-height:1.5}
+.itam-change-form #content .aligned .form-row{min-width:0;padding:18px 20px;border-bottom:1px solid #edf1f4;overflow:visible}
+.itam-change-form #content .aligned .form-row:has(textarea),.itam-change-form #content .aligned .form-row:has(.selector),.itam-change-form #content .aligned .form-row:has(.form-multiline){grid-column:1/-1}
+.itam-change-form #content .aligned .form-row>div{min-width:0;width:100%}
+.itam-change-form #content .aligned .flex-container:not(.checkbox-row):not(.form-multiline){flex-direction:column;align-items:stretch;gap:8px;min-width:0}
+.itam-change-form #content .aligned .form-multiline{gap:20px;flex-wrap:wrap}
+.itam-change-form #content .aligned .form-multiline>div{flex:1 1 220px;min-width:0}
+.itam-change-form #content .aligned label{display:block;float:none;width:auto;max-width:100%;padding:0;margin:0;font-size:14px;font-weight:500;line-height:1.5;color:#003366;overflow-wrap:anywhere}
+.itam-change-form #content .aligned label.required{font-weight:700}
+.itam-change-form #content .aligned label.required::after{content:' *';color:#a33d32}
+.itam-change-form #content .aligned .checkbox-row{align-items:center;gap:10px;min-height:44px}
+.itam-change-form #content .aligned .checkbox-row label{display:inline-block;margin:0}
+.itam-change-form #content input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=submit]):not([type=button]):not([type=file]),.itam-change-form #content select:not([multiple]),.itam-change-form #content textarea{width:100%;max-width:100%;min-width:0;min-height:44px;padding:10px 12px;border:1px solid #cbd8e0;border-radius:7px;background:#fff;color:#203342;font-family:inherit;font-size:15px;line-height:1.5;box-shadow:0 1px 2px #20334205}
+.itam-change-form #content textarea{min-height:125px;height:136px;resize:vertical}
+.itam-change-form #content input:disabled,.itam-change-form #content select:disabled{background:#f4f7f9;color:#596875;cursor:not-allowed}
+.itam-change-form #content .aligned .readonly{min-height:44px;padding:10px 12px;border:1px solid #e4ebef;border-radius:7px;background:#f4f7f9;color:#344958;font-size:15px;line-height:1.5;overflow-wrap:anywhere}
+.itam-change-form #content .aligned .readonly p{margin:0}
+.itam-change-form #content .aligned .help{margin:8px 0 0!important;padding:0;font-size:13px!important;line-height:1.5}
+.itam-change-form #content .related-widget-wrapper{display:flex;align-items:center;flex-wrap:wrap;gap:7px;float:none;width:100%;min-width:0}
+.itam-change-form #content .related-widget-wrapper>select{flex:1 1 150px;width:auto}
+.itam-change-form #content .related-widget-wrapper-link{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:32px;margin:0}
+.itam-change-form #content .related-widget-wrapper .select2-container{flex:1 1 150px;width:auto!important;max-width:100%;min-width:0}
+.itam-change-form #content .select2-container .select2-selection--single{min-height:44px;height:auto;padding:6px;border-color:#cbd8e0;border-radius:7px}
+.itam-change-form #content .select2-container .select2-selection__rendered{line-height:30px;white-space:normal;overflow-wrap:anywhere}
+.itam-change-form #content .select2-container .select2-selection__arrow{top:8px}
+.itam-change-form #content p.datetime{margin:0;line-height:2}
+.itam-change-form #content .datetime input{max-width:240px!important}
+.itam-change-form #content .datetimeshortcuts{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0}
+.itam-change-form #content .errorlist{margin:0 0 10px;padding:10px 12px;border-left:3px solid #a33d32;background:#fff3f1;color:#a12d25;list-style:none;line-height:1.5}
+.itam-change-form #content .errors input,.itam-change-form #content .errors select,.itam-change-form #content .errors textarea{border-color:#a33d32}
+.itam-change-form #content .inline-group{margin:0 0 22px;min-width:0;border-radius:10px;background:#fff}
+.itam-change-form #content .inline-group>fieldset.module{margin:0;min-width:0}
+.itam-change-form #content .inline-related h3{padding:12px 18px;background:#f4f7f9;color:#344958;border-bottom:1px solid #e4ebef;font-size:14px;line-height:1.5}
+.itam-change-form #content .inline-related fieldset.module.aligned{margin:0;border:0;box-shadow:none;border-radius:0}
+.itam-change-form #content .inline-group .tabular{max-width:100%;overflow-x:auto}
+.itam-change-form #content .inline-group .tabular table{width:100%;min-width:600px}
+.itam-change-form #content .inline-group .tabular th{background:#f4f7f9;color:#003366;font-size:13px;text-transform:none}
+.itam-change-form #content .inline-group .tabular td{padding:14px 12px;vertical-align:top;min-width:150px}
+.itam-change-form #content .inline-group .add-row{padding:12px 20px;background:#fff8f3;border-radius:0 0 9px 9px}
+.itam-change-form #content .inline-group input[type=file]{max-width:100%;font:inherit;font-size:14px}
+.itam-change-form #content .inline-group input[type=file]::file-selector-button{padding:8px 12px;margin-right:10px;border:1px solid #d5dfe6;border-radius:6px;background:#e8f2f8;color:#003366;cursor:pointer}
+.itam-change-form #content .submit-row{padding:18px 20px;border-top:3px solid #f37035;background:#fff}
+@media(max-width:1024px){.itam-change-form #content fieldset.module.aligned{grid-template-columns:1fr}}
+@media(max-width:767px){.itam-change-form #content .aligned .form-row{padding:16px}.itam-change-form #content fieldset.module h2,.itam-change-form #content .inline-group h2{padding:14px 16px}.itam-change-form #content .aligned .description{padding:12px 16px}.itam-change-form #content .submit-row{padding:16px}}
+
+.itam-change-form #content h1,.itam-change-form #content h2,.itam-change-form #content .itam-notice{overflow-wrap:anywhere}
+.itam-change-form #content .inline-group h2{text-transform:none}
+
+/* Cronología del activo */
+.itam-timeline-panel .itam-page-heading h2 {
+  margin-bottom: 5px !important;
+}
+
+.itam-timeline-panel .itam-notice p {
+  margin: 0;
+}
+
+.itam-timeline-panel .itam-notice p + p {
+  margin-top: 8px;
+}
+
+.itam-timeline {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.itam-timeline::before {
+  position: absolute;
+  inset: 18px auto 18px 17px;
+  width: 2px;
+  background: #d5dfe6;
+  content: "";
+}
+
+.itam-timeline-event {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.itam-timeline-marker {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #e8f2f8;
+  color: #003366;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.itam-timeline-return .itam-timeline-marker {
+  background: #e5f3ed;
+  color: #226547;
+}
+
+.itam-timeline-maintenance .itam-timeline-marker {
+  background: #fff0e5;
+  color: #924019;
+}
+
+.itam-timeline-card {
+  padding: 14px 16px;
+  border: 1px solid #dbe3e9;
+  border-radius: 8px;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+
+.itam-timeline-heading,
+.itam-timeline-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.itam-timeline-heading h3 {
+  margin: 0;
+  color: #003366;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.itam-timeline-heading time,
+.itam-timeline-footer {
+  color: #596875;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.itam-timeline-detail {
+  margin: 8px 0 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.itam-timeline-footer {
+  padding-top: 10px;
+  border-top: 1px solid #edf1f4;
+}
+
+.itam-timeline-footer a {
+  font-weight: 600;
+}
+
+.itam-timeline-empty {
+  margin: 0;
+  padding: 20px;
+  border-radius: 8px;
+  background: #f4f7f9;
+  color: #596875;
+}
+
+@media (max-width: 767px) {
+  .itam-timeline::before {
+    left: 13px;
+  }
+
+  .itam-timeline-event {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .itam-timeline-marker {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .itam-timeline-card {
+    padding: 12px;
+  }
+}
+
+/* Buscador compartido de los listados */
+#changelist #changelist-search .itam-list-search-controls {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: 100%;
+  max-width: 540px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid #cbd8e0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+#changelist #changelist-search .itam-list-search-controls img {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+#changelist #changelist-search #searchbar {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  min-height: 38px;
+  margin: 0;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: #203342;
+  font: inherit;
+  font-size: 14px;
+}
+
+#changelist #changelist-search .itam-list-search-controls button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: #f37035;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#changelist #changelist-search .itam-list-search-controls button:hover {
+  background: #df6129;
+}
+
+#changelist #changelist-search .itam-list-search-results {
+  margin: 10px 0 0;
+  color: #596875;
+  font-size: 13px;
+}
+
+.itam-brand-assets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.itam-brand-assets strong {
+  color: #003366;
+}

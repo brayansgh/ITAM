@@ -1,29 +1,38 @@
 {% extends "admin/object_history.html" %}
 {% load tz %}
+{% block content_title %}
+<div class="itam-page-heading"><div><h1>Historial del registro</h1><p>{{ object }}</p></div><a class="button" href="{% url 'admin:itam_audit' %}">Volver a Auditoría</a></div>
+{% endblock %}
 {% block content %}
-<div id="content-main">
-  <div class="module">
-    <h2>Historial de datos</h2>
-    <p>Zona horaria: {{ audit_timezone }}. Orden: del más reciente al más antiguo.</p>
-    <p>Versiones registradas: {{ audit_counts.total }} · Creaciones: {{ audit_counts.created }} · Modificaciones: {{ audit_counts.modified }} · Eliminaciones: {{ audit_counts.deleted }}</p>
-    <p>Los conteos corresponden a versiones guardadas de este registro; no representan usuarios únicos ni operaciones de negocio. Los eventos administrativos y los registros relacionados se cuentan aparte.</p>
+<div id="content-main" class="itam-audit-layout">
+  <div class="itam-notice itam-audit-intro"><span class="itam-audit-intro-icon" aria-hidden="true">🔎</span><div><strong>Consulta de trazabilidad · solo lectura</strong><p>Zona horaria: {{ audit_timezone }}. Orden: del más reciente al más antiguo. Los conteos corresponden a versiones guardadas de este registro; no representan usuarios únicos ni operaciones de negocio.</p></div></div>
+  <dl class="itam-audit-summary" aria-label="Resumen de versiones de datos">
+    <div><dt>Versiones de datos</dt><dd>{{ audit_counts.total }}</dd></div>
+    <div><dt>Creaciones</dt><dd>{{ audit_counts.created }}</dd></div>
+    <div><dt>Modificaciones</dt><dd>{{ audit_counts.modified }}</dd></div>
+    <div><dt>Eliminaciones</dt><dd>{{ audit_counts.deleted }}</dd></div>
+  </dl>
+  <nav class="itam-tabs itam-audit-sections" aria-label="Secciones del historial"><a href="#audit-data">Historial de datos</a>{% if related_count %}<a href="#audit-related">Registros relacionados</a>{% endif %}<a href="#audit-events">Eventos administrativos</a></nav>
+  <section id="audit-data" class="itam-panel itam-audit-section" aria-labelledby="audit-data-title">
+    <div class="itam-audit-section-heading"><h2 id="audit-data-title"><span aria-hidden="true">📋</span> Historial de datos</h2><span class="itam-label">{{ audit_counts.total }} versiones</span></div>
+    <p class="itam-note">Valores anteriores y nuevos de cada cambio. Los eventos administrativos y los registros relacionados se cuentan aparte.</p>
     {% include "admin/core/audit_rows.html" with rows=audit_rows %}
-    <p class="paginator">{% if audit_page.has_previous %}<a href="?page={{ audit_page.previous_page_number }}&amp;events_page={{ admin_events.number }}">Anterior</a>{% endif %} Página {{ audit_page.number }} de {{ audit_page.paginator.num_pages }} {% if audit_page.has_next %}<a href="?page={{ audit_page.next_page_number }}&amp;events_page={{ admin_events.number }}">Siguiente</a>{% endif %}</p>
-  </div>
-  {% if related_count %}<div class="module">
-    <h2>Registros relacionados</h2>
-    <p>Versiones relacionadas: {{ related_count }}. Se muestran como máximo las 50 más recientes; no se suman al historial del registro principal.</p>
+    <nav class="paginator itam-audit-pagination" aria-label="Páginas del historial de datos">{% if audit_page.has_previous %}<a href="?page={{ audit_page.previous_page_number }}&amp;events_page={{ admin_events.number }}#audit-data">← Anterior</a>{% endif %}<span>Página {{ audit_page.number }} de {{ audit_page.paginator.num_pages }}</span>{% if audit_page.has_next %}<a href="?page={{ audit_page.next_page_number }}&amp;events_page={{ admin_events.number }}#audit-data">Siguiente →</a>{% endif %}</nav>
+  </section>
+  {% if related_count %}<section id="audit-related" class="itam-panel itam-audit-section" aria-labelledby="audit-related-title">
+    <div class="itam-audit-section-heading"><h2 id="audit-related-title"><span aria-hidden="true">📎</span> Registros relacionados</h2><span class="itam-label">{{ related_count }} versiones relacionadas</span></div>
+    <p class="itam-note">Se muestran como máximo las 50 más recientes; no se suman al historial del registro principal.</p>
     {% include "admin/core/audit_rows.html" with rows=related_rows related=True %}
-  </div>{% endif %}
-  <div class="module">
-    <h2>Eventos administrativos</h2>
-    <p>Eventos: {{ admin_events.paginator.count }}. Corresponden a acciones en Admin; pueden referirse a operaciones que también generaron versiones de datos. No se suman ambos conteos.</p>
-    <p>Los registros antiguos conservan el detalle disponible.</p>
-    <table style="width:100%"><thead><tr><th>Fecha / Hora</th><th>Responsable</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>
-    {% for event in admin_events %}<tr><td>{{ event.action_time|localtime|date:"d/m/Y H:i:s" }}</td><td>{{ event.user.get_username }}</td><td>{% if event.is_addition %}Creación{% elif event.is_deletion %}Eliminación{% else %}Modificación{% endif %}</td><td>{{ event.get_change_message }}</td></tr>
-    {% empty %}<tr><td colspan="4">No hay eventos administrativos registrados.</td></tr>{% endfor %}
-    </tbody></table>
-    <p class="paginator">{% if admin_events.has_previous %}<a href="?events_page={{ admin_events.previous_page_number }}&amp;page={{ audit_page.number }}">Anterior</a>{% endif %} Página {{ admin_events.number }} de {{ admin_events.paginator.num_pages }} {% if admin_events.has_next %}<a href="?events_page={{ admin_events.next_page_number }}&amp;page={{ audit_page.number }}">Siguiente</a>{% endif %}</p>
-  </div>
+  </section>{% endif %}
+  <section id="audit-events" class="itam-panel itam-audit-section" aria-labelledby="audit-events-title">
+    <div class="itam-audit-section-heading"><h2 id="audit-events-title"><span aria-hidden="true">🕒</span> Eventos administrativos</h2><span class="itam-label">{{ admin_events.paginator.count }} eventos</span></div>
+    <p class="itam-note">Corresponden a acciones en Admin; pueden referirse a operaciones que también generaron versiones de datos. No se suman ambos conteos. Los registros antiguos conservan el detalle disponible.</p>
+    <div class="itam-table-wrap itam-audit-table-wrap" role="region" aria-label="Eventos administrativos" tabindex="0">
+    <table class="itam-audit-table"><thead><tr><th scope="col">Fecha / Hora</th><th scope="col">Responsable</th><th scope="col">Acción</th><th scope="col">Detalle</th></tr></thead><tbody>
+    {% for event in admin_events %}<tr><td class="itam-audit-date">{{ event.action_time|localtime|date:"d/m/Y H:i:s T" }}</td><td>{{ event.user.get_username|default:'Sin responsable registrado' }}</td><td><span class="itam-audit-action {% if event.is_addition %}itam-audit-created{% elif event.is_deletion %}itam-audit-deleted{% else %}itam-audit-modified{% endif %}">{% if event.is_addition %}Creación{% elif event.is_deletion %}Eliminación{% else %}Modificación{% endif %}</span></td><td class="itam-audit-value">{{ event.get_change_message }}</td></tr>
+    {% empty %}<tr><td colspan="4" class="itam-audit-empty">No hay eventos administrativos registrados.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <nav class="paginator itam-audit-pagination" aria-label="Páginas de eventos administrativos">{% if admin_events.has_previous %}<a href="?events_page={{ admin_events.previous_page_number }}&amp;page={{ audit_page.number }}#audit-events">← Anterior</a>{% endif %}<span>Página {{ admin_events.number }} de {{ admin_events.paginator.num_pages }}</span>{% if admin_events.has_next %}<a href="?events_page={{ admin_events.next_page_number }}&amp;page={{ audit_page.number }}#audit-events">Siguiente →</a>{% endif %}</nav>
+  </section>
 </div>
 {% endblock %}

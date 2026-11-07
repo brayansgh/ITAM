@@ -36,6 +36,7 @@ class CorporateAdminTests(TestCase):
                 response = self.client.get(reverse(f'admin:{model}_add'))
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, 'name="_save"')
+                self.assertContains(response, 'itam-change-form')
                 for action in ['_addanother', '_continue', '_saveasnew']:
                     self.assertNotContains(response, f'name="{action}"')
         response = self.client.get(reverse('admin:inventory_category_change', args=[self.category.pk]))
@@ -85,6 +86,119 @@ class CorporateAdminTests(TestCase):
         })
         self.assertTrue(Category.objects.filter(pk=self.category.pk).exists())
 
+    def test_audit_catalog_groups_only_permitted_modules(self):
+        response = self.client.get(reverse('admin:itam_audit'))
+        self.assertEqual(response.status_code, 200)
+        groups = response.context['audit_groups']
+        self.assertTrue(groups)
+        self.assertEqual([link for group in groups for link in group['links']], response.context['links'])
+        viewer = User.objects.create_user(username='audit_catalog_viewer', is_staff=True, role='OTHER')
+        viewer.user_permissions.add(Permission.objects.get(codename='view_category'))
+        self.client.force_login(viewer)
+        response = self.client.get(reverse('admin:itam_audit'))
+        self.assertContains(response, reverse('admin:inventory_category_changelist'))
+        links = [link['url'] for group in response.context['audit_groups'] for link in group['links']]
+        self.assertEqual(links, [reverse('admin:inventory_category_changelist')])
+        viewer.user_permissions.clear()
+        response = self.client.get(reverse('admin:itam_audit'))
+        self.assertEqual(response.context['audit_groups'], [])
+        self.assertContains(response, 'Sin módulos disponibles')
+
+    def test_documents_identify_type_employee_and_keep_protected_links(self):
+        from assignments.models import OffboardingRecord
+        from assignments.services import create_assignment
+        from maintenance.models import MaintenanceDocument
+        assignment = create_assignment(asset_id=self.asset.pk, employee_id=self.employee.pk,
+                                       assigned_by=self.user, initial_condition='Buen estado')
+        assignment.signed_act_pdf = 'actas/synthetic.pdf'
+        assignment.save(update_fields=['signed_act_pdf'])
+        returned = OffboardingRecord.objects.create(employee=self.employee, received_by=self.user,
+                                                     pdf='actas_desvinculacion/synthetic.pdf')
+        ticket = MaintenanceRecord.objects.create(asset=self.asset, type=MaintenanceType.PREVENTIVE,
+                                                  reported_by=self.user, description='Prueba documental')
+        document = MaintenanceDocument.objects.create(maintenance=ticket, document='maintenance_docs/synthetic.pdf')
+        for kind, label, employee, url in [
+            ('entrega', 'Entrega', self.employee.full_name, reverse('download_act_pdf', args=[assignment.pk])),
+            ('devolucion', 'Devolución', self.employee.full_name, reverse('admin:assignments_offboardingrecord_view_pdf', args=[returned.pk])),
+            ('mantenimiento', 'Mantenimiento / baja', 'No aplica', reverse('admin:maintenance_document_download', args=[document.pk])),
+        ]:
+            with self.subTest(kind=kind):
+                response = self.client.get(reverse('admin:itam_documents'), {'tipo': kind})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context['rows'][0]['document_type'], label)
+                self.assertEqual(response.context['rows'][0]['employee'], employee)
+                self.assertContains(response, '<th>Tipo de documento</th>')
+                self.assertContains(response, '<th>Empleado</th>')
+                self.assertContains(response, employee)
+                self.assertContains(response, url)
+                self.assertNotContains(response, '/media/')
+        viewer = User.objects.create_user(username='document_denied', is_staff=True, role='OTHER')
+        self.client.force_login(viewer)
+        for kind in ['entrega', 'devolucion', 'mantenimiento']:
+            self.assertEqual(self.client.get(reverse('admin:itam_documents'), {'tipo': kind}).status_code, 403)
+
+    def test_closed_tickets_use_shared_style_without_mutating_controls(self):
+        from core.testing import complete_decommission
+        closed = complete_decommission(self.asset, self.user)
+        url = reverse('admin:maintenance_maintenancerecord_change', args=[closed.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'itam-change-form')
+        self.assertContains(response, 'Solo consulta')
+        self.assertNotContains(response, 'name="_save"')
+        self.assertNotContains(response, 'class="deletelink"')
+        self.assertNotContains(response, 'type="file"')
+        self.assertEqual(self.client.post(url, {'status': 'OPEN'}).status_code, 403)
+        frozen = self.client.get(reverse('admin:inventory_decommissionedasset_change', args=[self.asset.pk]), {'editar': 1})
+        self.assertEqual(frozen.status_code, 200)
+        self.assertContains(frozen, 'itam-change-form')
+        self.assertNotContains(frozen, 'name="_save"')
+
+    def test_brand_assets_count_and_links_follow_inventory_permissions(self):
+        from core.testing import complete_decommission
+        from inventory.models import Brand
+
+        brand = Brand.objects.create(name='Marca sintética')
+        self.asset.brand = brand
+        self.asset.save(update_fields=['brand'])
+        retired = Asset.objects.create(company=self.company, owner_company=self.company,
+                                       category=self.category, brand=brand)
+        complete_decommission(retired, self.user)
+        unrelated = Asset.objects.create(company=self.company, owner_company=self.company,
+                                         category=self.category)
+        brands_url = reverse('admin:inventory_brand_changelist')
+        active_url = reverse('admin:inventory_asset_changelist')
+        retired_url = reverse('admin:inventory_decommissionedasset_changelist')
+        params = {'brand__id__exact': str(brand.pk)}
+
+        response = self.client.get(brands_url)
+        self.assertContains(response, 'Ver vigentes (1)')
+        self.assertContains(response, 'Ver bajas (1)')
+        self.assertContains(response, '<strong>2</strong>')
+        self.assertContains(response, f'{active_url}?brand__id__exact={brand.pk}')
+        self.assertContains(response, f'{retired_url}?brand__id__exact={brand.pk}')
+        self.assertEqual(list(self.client.get(active_url, params).context['cl'].result_list), [self.asset])
+        self.assertEqual([row.pk for row in self.client.get(retired_url, params).context['cl'].result_list], [retired.pk])
+
+        response = self.client.get(active_url, {**params, 'q': self.asset.asset_tag})
+        self.assertEqual(list(response.context['cl'].result_list), [self.asset])
+        self.assertContains(response, 'class="itam-list-search-controls"')
+        self.assertContains(response, f'name="brand__id__exact" value="{brand.pk}"')
+        self.assertEqual(list(self.client.get(active_url, {**params, 'q': unrelated.asset_tag}).context['cl'].result_list), [])
+
+        viewer = User.objects.create_user(username='brand_viewer', is_staff=True, role='OTHER')
+        viewer.user_permissions.add(Permission.objects.get(content_type__app_label='inventory', codename='view_brand'))
+        self.client.force_login(viewer)
+        response = self.client.get(brands_url)
+        self.assertContains(response, 'Sin permiso para consultar activos')
+        self.assertNotContains(response, 'Ver vigentes')
+        self.assertNotContains(response, 'Ver bajas')
+        viewer.user_permissions.add(Permission.objects.get(content_type__app_label='inventory', codename='view_asset'))
+        response = self.client.get(brands_url)
+        self.assertContains(response, 'Ver vigentes (1)')
+        self.assertNotContains(response, 'Ver bajas')
+        self.assertEqual(self.client.get(retired_url, params).status_code, 403)
+
     def test_search_finds_primary_plate_and_internal_code_and_employee(self):
         for term in ['PL-SYNTHETIC', 'ACE-0001', 'Persona sintética']:
             response = self.client.get(reverse('admin:itam_search'), {'q': term})
@@ -117,6 +231,8 @@ class CorporateAdminTests(TestCase):
         self.assertNotContains(detail, 'name="_save"')
         edit = self.client.get(route, {'editar': 1})
         self.assertFalse(edit.context['asset_detail'])
+        self.assertContains(edit, 'Información técnica')
+        self.assertContains(edit, 'Red y telefonía')
         self.assertContains(edit, 'name="_save"')
         self.assertNotIn('owner_company', edit.context['adminform'].form.fields)
         self.assertNotIn('asset_tag', edit.context['adminform'].form.fields)

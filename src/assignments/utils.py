@@ -7,11 +7,10 @@ from django.utils import timezone
 from .models import Assignment
 
 def generate_act_pdf(assignment):
-    # Corrección: brand está vinculado al modelo, no directamente al activo
     active_assignments = Assignment.objects.filter(
         employee=assignment.employee, 
         status='ACTIVE'
-    ).select_related('asset', 'asset__category', 'asset__model', 'asset__model__brand')
+    ).select_related('asset', 'asset__category', 'asset__model', 'asset__brand')
     
     context = {
         'company': assignment.asset.company,

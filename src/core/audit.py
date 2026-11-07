@@ -74,7 +74,7 @@ def format_value(field, value):
 def version_row(record, previous, relations_since=None):
     changes = []
     excluded = set(IGNORED_FIELDS)
-    note = ""
+    note = "Separación de marca: copia exacta de la asociación del modelo legado." if record.history_change_reason == "Separación de marca: copia exacta de la asociación del modelo legado." else ""
     if previous is not None and relations_since is not None and previous.history_date < relations_since:
         excluded.update({"groups", "user_permissions"})
         note = "La versión anterior no incluye seguimiento completo de grupos y permisos; no se reconstruyen diferencias de esas relaciones."

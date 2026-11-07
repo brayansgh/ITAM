@@ -1,1 +1,18 @@
-{% extends 'admin/base_site.html' %}{% block content %}<section class="itam-panel"><p>Selecciona un módulo y abre el historial del registro que deseas consultar.</p><p class="itam-note">Las versiones de datos, anexos y eventos administrativos se presentan por separado. No representan personas o activos únicos.</p><ul class="itam-result-list">{% for link in links %}<li><a href="{{ link.url }}">{{ link.label }}</a></li>{% endfor %}</ul></section>{% endblock %}
+{% extends 'admin/base_site.html' %}
+{% block content_title %}
+<div class="itam-page-heading"><div><h1>Auditoría</h1><p>Consulta la trazabilidad y los cambios registrados en cada módulo.</p></div><span class="itam-label">Solo consulta</span></div>
+{% endblock %}
+{% block content %}
+<div class="itam-audit-layout">
+  <section class="itam-notice itam-audit-intro" aria-label="Cómo consultar la auditoría">
+    <span class="itam-audit-intro-icon" aria-hidden="true">📋</span>
+    <div><strong>Encuentra el historial de un registro</strong><p>Selecciona un módulo, abre su registro y elige Histórico. Las versiones de datos, anexos y eventos administrativos se presentan por separado; no representan personas o activos únicos.</p></div>
+  </section>
+  {% for group in audit_groups %}
+  <section class="itam-panel itam-audit-group" aria-labelledby="audit-group-{{ forloop.counter }}">
+    <div class="itam-audit-section-heading"><h2 id="audit-group-{{ forloop.counter }}">{{ group.label }}</h2><span class="itam-note">{{ group.links|length }} módulo{{ group.links|length|pluralize }}</span></div>
+    <div class="itam-audit-modules">{% for link in group.links %}<a class="itam-audit-module" href="{{ link.url }}"><span class="itam-audit-module-icon" aria-hidden="true">{{ group.icon }}</span><span><strong>{{ link.label }}</strong><small>Consultar registros e historial</small></span><span class="itam-audit-arrow" aria-hidden="true">→</span></a>{% endfor %}</div>
+  </section>
+  {% empty %}<section class="itam-panel"><h2>Sin módulos disponibles</h2><p>Tu cuenta no tiene módulos disponibles para consultar. El historial conserva los permisos de cada registro.</p></section>{% endfor %}
+</div>
+{% endblock %}

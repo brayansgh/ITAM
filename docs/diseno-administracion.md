@@ -77,3 +77,21 @@ La ejecución y los límites están registrados en `docs/estado-proyecto.md`. Lo
 
 - El control de navegación vive junto al nombre en la cabecera, con posición en flujo y separación adaptable; no depende de coordenadas absolutas. No se muestra en login ni ventanas emergentes sin navegación.
 - Los listados no ofrecen selector Acción / Ir ni casillas de selección masiva. StandardHistoryAdmin no expone acciones masivas, incluidos administradores con acciones propias; el proxy de empleados retirados también las desactiva. Se conservan las acciones individuales autorizadas, la edición de estado por fila en importaciones y las funciones de servicio existentes.
+
+## Presentación de auditoría — 6 de noviembre de 2026
+
+- Catálogo de módulos agrupado por aplicación, con tarjetas, iconos y enlaces según los permisos existentes. Instrucciones de acceso al historial y estado sin módulos disponibles.
+- Historial por registro con resumen exclusivo de versiones de datos y secciones enlazadas para datos, registros relacionados y eventos administrativos. Las cifras no se suman entre dimensiones.
+- Paneles corporativos, etiquetas de acción, fondos diferenciados para valores anteriores/nuevos, fechas con segundos y zona horaria; tablas con desplazamiento propio en pantallas pequeñas. Paginación independiente por sección, sin restauraciones ni cambios de autorización.
+
+## Formularios uniformes — 6 de noviembre de 2026
+
+- Plantilla compartida de edición en src/templates/admin/change_form.html, heredada también por activos, mantenimiento y bajas. La cabecera distingue nuevo registro, edición y solo consulta según permisos.
+- Secciones en tarjetas blancas con acento naranja, etiquetas superiores, controles de mínimo 44 px y distribución en dos columnas que pasa a una en pantallas estrechas. Los textos largos ocupan la fila completa y pueden redimensionarse.
+- Fechas, autocompletados, relaciones, selectores de permisos, ayudas, errores y anexos mantienen los widgets originales de Django y su comportamiento. Anexos técnicos con títulos en español; tablas de documentos con desplazamiento interno.
+- Sin botones nuevos ni cambios en las reglas de cierre o permisos: Guardar, Cancelar y Eliminar aparecen únicamente donde corresponde. Bajas definitivas y tickets cerrados conservan consulta y descarga protegida.
+
+## Marca, modelo y formularios autenticados — 6 de noviembre de 2026
+
+- En activos, Marca y Modelo son catálogos opcionales e independientes. Grupo y Tipo conservan su validación conjunta. Las asociaciones antiguas del modelo se conservan como legado, sin imponerlas al editar. Las fichas y actas nuevas usan la marca propia del activo.
+- Los formularios POST autenticados renuevan el token mediante una vista protegida y sin caché antes de guardar. Si falla la renovación, conservan los datos en pantalla. CSRF, permisos y confirmaciones se mantienen.

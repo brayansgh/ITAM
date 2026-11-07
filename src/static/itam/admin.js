@@ -15,20 +15,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-itam-tab]').forEach(tab => tab.setAttribute('aria-selected', String(tab === button)));
     document.querySelectorAll('[data-itam-panel]').forEach(panel => { panel.hidden = panel.id !== button.dataset.itamTab; });
   }));
+  const tokenEndpoint = document.querySelector('meta[name="itam-form-token-url"]')?.content;
   document.querySelectorAll('form').forEach(form => {
-    const status = form.querySelector('#id_status');
-    if (status && form.id === 'maintenancerecord_form') form.addEventListener('submit', event => {
-      if (['COMPLETED', 'CANCELLED'].includes(status.value)) {
-        const message = status.value === 'CANCELLED'
-          ? '¿Cancelar el ticket? Sus datos y evidencias quedarán de solo consulta.'
-          : '¿Completar el ticket? Sus datos y evidencias quedarán de solo consulta. Si es una baja, el activo quedará dado de baja.';
-        if (!window.confirm(message)) event.preventDefault();
-      }
-    });
-    if (['asset_form', 'employee_form', 'maintenancerecord_form'].includes(form.id)) {
-      let changed = false;
+    const trackChanges = ['asset_form', 'employee_form', 'maintenancerecord_form'].includes(form.id);
+    let changed = false;
+    let refreshing = false;
+    let refreshed = false;
+    if (trackChanges) {
       form.addEventListener('change', () => { changed = true; });
-      form.addEventListener('submit', event => { if (!event.defaultPrevented) changed = false; });
       window.addEventListener('beforeunload', event => {
         if (changed) { event.preventDefault(); event.returnValue = ''; }
       });
@@ -37,5 +31,58 @@ document.addEventListener('DOMContentLoaded', () => {
         else changed = false;
       }));
     }
+    form.addEventListener('submit', async event => {
+      if (event.defaultPrevented) return;
+      if (refreshed) { refreshed = false; changed = false; return; }
+      if (refreshing) { event.preventDefault(); return; }
+      const status = form.querySelector('#id_status');
+      if (status && form.id === 'maintenancerecord_form' && ['COMPLETED', 'CANCELLED'].includes(status.value)) {
+        const message = status.value === 'CANCELLED'
+          ? '¿Cancelar el ticket? Sus datos y evidencias quedarán de solo consulta.'
+          : '¿Completar el ticket? Sus datos y evidencias quedarán de solo consulta. Si es una baja, el activo quedará dado de baja.';
+        if (!window.confirm(message)) { event.preventDefault(); return; }
+      }
+      const tokens = form.querySelectorAll('input[name="csrfmiddlewaretoken"]');
+      if (!tokenEndpoint || form.method.toLowerCase() !== 'post' || !tokens.length || new URL(form.action, location.href).origin !== location.origin) {
+        changed = false;
+        return;
+      }
+      event.preventDefault();
+      refreshing = true;
+      form.setAttribute('aria-busy', 'true');
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 10000);
+      let ready = false;
+      try {
+        const response = await fetch(tokenEndpoint, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal});
+        if (!response.ok || response.redirected) throw new Error('Sesión no disponible');
+        const data = await response.json();
+        if (typeof data.csrfToken !== 'string' || !/^[a-zA-Z0-9]{64}$/.test(data.csrfToken)) throw new Error('Token no válido');
+        tokens.forEach(token => { token.value = data.csrfToken; });
+        form.querySelector('.itam-csrf-error')?.remove();
+        ready = true;
+      } catch (error) {
+        let notice = form.querySelector('.itam-csrf-error');
+        if (!notice) {
+          notice = document.createElement('p');
+          notice.className = 'errornote itam-csrf-error';
+          notice.setAttribute('role', 'alert');
+          form.prepend(notice);
+        }
+        notice.textContent = 'No se pudo validar la sesión. Tus datos siguen en el formulario. Si la sesión terminó, inicia sesión en otra pestaña y vuelve a pulsar Guardar.';
+        notice.scrollIntoView({block: 'nearest'});
+      } finally {
+        window.clearTimeout(timeout);
+        refreshing = false;
+        form.removeAttribute('aria-busy');
+      }
+      if (ready) {
+        refreshed = true;
+        if (event.submitter) form.requestSubmit(event.submitter);
+        else form.requestSubmit();
+        // Si la validación nativa impidió el envío, no reutilizar el token después.
+        refreshed = false;
+      }
+    });
   });
 });

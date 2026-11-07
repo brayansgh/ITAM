@@ -155,7 +155,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
                 "asset",
                 "asset__category",
                 "asset__model",
-                "asset__model__brand",
+                "asset__brand",
             )
         )
 

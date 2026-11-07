@@ -59,7 +59,7 @@
         <tr class="text-center">
             <td>{{ asg.asset.category.name|upper }}</td>
             <td>{{ asg.asset.legacy_asset_tag|default:asg.asset.asset_tag|upper }}</td>
-            <td>{{ asg.asset.model.brand.name|upper|default:"N/A" }}</td>
+            <td>{{ asg.asset.brand.name|upper|default:"N/A" }}</td>
             <td>{{ asg.asset.model.name|upper|default:"N/A" }}</td>
             <td>{{ asg.asset.serial_number|upper|default:"N/A" }}</td>
         </tr>
