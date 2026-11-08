@@ -1,10 +1,46 @@
 {% extends "admin/base.html" %}{% load static itam_navigation %}
 {% block title %}{{ title }} | ITAM{% endblock %}
-{% block dark-mode-vars %}{% endblock %}
-{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'itam/admin.css' %}?v=20261106-11">{% endblock %}
-{% block extrahead %}{{ block.super }}{% if has_permission %}<meta name="itam-form-token-url" content="{% url 'admin:itam_form_token' %}">{% endif %}<link rel="icon" type="image/png" href="{% static 'img/palma-cabecera.png' %}"><script src="{% static 'itam/admin.js' %}?v=20261107-2" defer></script>{% endblock %}
-{% block branding %}<a class="itam-brand" href="{% url 'admin:index' %}"><img src="{% static 'img/palma.png' %}" alt=""><span>C.I. ACEPALMA</span></a>{% if has_permission and is_nav_sidebar_enabled and not is_popup %}<button class="itam-menu-toggle" type="button" aria-controls="itam-navigation" aria-expanded="true" aria-label="Mostrar u ocultar menú">☰</button>{% endif %}{% endblock %}
-{% block usertools %}{% if has_permission %}<form action="{% url 'admin:itam_search' %}" method="get" class="itam-global-search" role="search"><label class="visually-hidden" for="itam-global-q">Buscar activos o empleados</label><input id="itam-global-q" name="q" type="search" placeholder="Buscar activos o empleados…" maxlength="150" value="{{ query|default:'' }}"><button type="submit">Buscar</button></form><div id="user-tools"><details class="itam-account"><summary>{{ user.get_short_name|default:user.username }}</summary><div><p>{{ user.get_role_display }}</p><a href="{% url 'admin:password_change' %}">Cambiar contraseña</a><form id="logout-form" method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit">Cerrar sesión</button></form></div></details></div>{% endif %}{% endblock %}
+{% block dark-mode-vars %}<script src="{% static 'itam/theme.js' %}?v=20261108-2"></script>{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<link rel="stylesheet" href="{% static 'itam/theme.css' %}?v=20261108-2">
+<link rel="stylesheet" href="{% static 'itam/admin.css' %}?v=20261108-11">{% endblock %}
+{% block extrahead %}{{ block.super }}{% if has_permission %}
+<meta name="itam-form-token-url" content="{% url 'admin:itam_form_token' %}">{% endif %}
+<link rel="icon" type="image/png" href="{% static 'img/palma-cabecera.png' %}">
+<script src="{% static 'itam/admin.js' %}?v=20261108-2" defer></script>{% endblock %}
+{% block branding %}<a class="itam-brand" href="{% url 'admin:index' %}"><img src="{% static 'img/palma.png' %}"
+        alt=""><span>C.I. ACEPALMA</span></a>{% if has_permission and is_nav_sidebar_enabled and not is_popup %}<button
+    class="itam-menu-toggle" type="button" aria-controls="itam-navigation" aria-expanded="true"
+    aria-label="Mostrar u ocultar menú">☰</button>{% endif %}{% endblock %}
+{% block usertools %}{% if has_permission %}<form action="{% url 'admin:itam_search' %}" method="get"
+    class="itam-global-search" role="search"><label class="visually-hidden" for="itam-global-q">Buscar activos o
+        empleados</label><input id="itam-global-q" name="q" type="search" placeholder="Buscar activos o empleados…"
+        maxlength="150" value="{{ query|default:'' }}"><button type="submit">Buscar</button></form>
+<div id="user-tools">
+    <details class="itam-account">
+        <summary class="itam-account-trigger">
+            <span class="itam-account-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                    <circle cx="12" cy="8" r="3"/>
+                    <path d="M5 20v-2a7 7 0 0 1 14 0v2"/>
+                </svg>
+            </span>
+            <span class="itam-account-name">{{ user.get_short_name|default:user.username }}</span>
+            <svg class="itam-account-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m4 6 4 4 4-4"/>
+            </svg>
+        </summary>
+        <div class="itam-account-panel">
+            <p class="itam-account-role">{{ user.get_role_display }}</p>
+            <a href="{% url 'admin:password_change' %}">Cambiar contraseña</a>
+            <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
+                {% csrf_token %}
+                <button type="submit">Cerrar sesión</button>
+            </form>
+        </div>
+    </details>
+</div>{% include 'itam_theme_picker.html' %}{% endif %}{% endblock %}
 {% block nav-sidebar %}{% include 'admin/itam/navigation.html' %}{% endblock %}
-{% block footer %}<footer id="footer">C.I. Acepalma<span>Dirección de Tecnología | ITAM</span></footer>{% endblock %}
+{% block footer %}<footer id="footer">C.I. Acepalma S.A.<span>Dirección de Tecnología | ITAM</span></footer>{% endblock %}
 {% block nav-breadcrumbs %}{% itam_breadcrumbs %}{% endblock %}

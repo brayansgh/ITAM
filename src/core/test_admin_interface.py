@@ -215,6 +215,10 @@ class CorporateAdminTests(TestCase):
         params = {'brand__id__exact': str(brand.pk)}
 
         response = self.client.get(brands_url)
+        self.assertEqual(response.context['title'], 'Marcas')
+        self.assertContains(response, 'Añadir marca')
+        self.assertContains(response, 'class="button itam-brand-active_assets"')
+        self.assertContains(response, 'class="button itam-brand-decommissioned_assets"')
         self.assertContains(response, 'Ver vigentes (1)')
         self.assertContains(response, 'Ver bajas (1)')
         self.assertContains(response, '<strong>2</strong>')

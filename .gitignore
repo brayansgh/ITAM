@@ -21,3 +21,37 @@ Thumbs.db
 # Instrucciones locales y respaldos privados
 /AGENTS.md
 /.private-backups/
+
+# Configuraciones y claves privadas en cualquier entorno
+.env.*
+!.env.example
+!.env.sample
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# Bases, respaldos y documentos con datos reales
+/postgres_backup/
+/backups/
+/private-data/
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.dump
+*.bak
+*.sql.gz
+*.sql
+*.xlsx
+*.xls
+*.csv
+*.pdf
+
+# Bitácora e informes internos
+/docs/estado-proyecto.md
+/docs/diagnostico-itam-*.md
+/docs/validacion-bajas-*.md

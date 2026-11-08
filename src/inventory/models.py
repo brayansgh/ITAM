@@ -28,6 +28,10 @@ class Brand(BaseModel):
     history = HistoricalRecords()
     name = models.CharField('Nombre', max_length=100, unique=True)
 
+    class Meta:
+        verbose_name = "marca"
+        verbose_name_plural = "marcas"
+
     def __str__(self):
         return self.name
 

@@ -1,12 +1,15 @@
 import pandas as pd
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from data_imports.models import StagingAsset
 
 class Command(BaseCommand):
     help = 'Carga el archivo Excel de inventario a la tabla temporal (Staging) excluyendo credenciales'
 
+    def add_arguments(self, parser):
+        parser.add_argument("archivo", help="Ruta del Excel de inventario en almacenamiento privado.")
+
     def handle(self, *args, **kwargs):
-        file_path = '/app/src/CI-FR-01 Control de activos tecnológicos_2026.xlsx'
+        file_path = kwargs["archivo"]
         
         try:
             self.stdout.write("Leyendo archivo Excel...")
@@ -22,7 +25,7 @@ class Command(BaseCommand):
                 
             self.stdout.write(self.style.SUCCESS("Extracción a Staging finalizada exitosamente."))
         except FileNotFoundError:
-            self.stdout.write(self.style.ERROR(f"No se encontró el archivo en la ruta: {file_path}"))
+            raise CommandError("No se encontró el archivo Excel indicado.") from None
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"Error inesperado: {str(e)}"))
 

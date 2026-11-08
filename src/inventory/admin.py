@@ -44,10 +44,12 @@ class BrandAdmin(StandardHistoryAdmin):
             if count is not None:
                 total += count
                 url = reverse(route) + '?' + urlencode({'brand__id__exact': obj.pk})
-                links.append((url, label, count))
+                links.append((url, key, label, count))
         if not links:
             return 'Sin permiso para consultar activos'
-        actions = format_html_join('', '<a href="{}" class="button">{} ({})</a>', links)
+        actions = format_html_join(
+            '', '<a href="{}" class="button itam-brand-{}">{} ({})</a>', links,
+        )
         return format_html('<div class="itam-brand-assets"><strong>{}</strong>{}</div>', total, actions)
 
 @admin.register(ModelAsset)
@@ -110,7 +112,10 @@ class AssetAdmin(StandardHistoryAdmin):
         if getattr(request, 'user', None):
             from assignments.models import Assignment
             if not self.admin_site._registry[Assignment].has_view_permission(request):
-                return tuple(field for field in fields if field != 'current_employee_name')
+                fields = tuple(field for field in fields if field != 'current_employee_name')
+            if not (request.user.has_perm('inventory.view_assetnetwork')
+                    or request.user.has_perm('inventory.change_assetnetwork')):
+                fields = tuple(field for field in fields if field != 'network__hostname')
         return fields
     
     def get_queryset(self, request):

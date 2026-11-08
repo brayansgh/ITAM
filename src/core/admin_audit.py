@@ -1,6 +1,6 @@
 from django.contrib.admin.models import LogEntry
 from django.contrib.admin.utils import unquote
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_permission_codename, get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
@@ -83,6 +83,10 @@ class StandardHistoryAdmin(SimpleHistoryAdmin):
         related = []
         related_count = 0
         for model, field_name in self.audit_related_models:
+            opts = model._meta
+            if not any(request.user.has_perm(f"{opts.app_label}.{get_permission_codename(action, opts)}")
+                       for action in ("view", "change")):
+                continue
             stream = model.history.filter(**{field_name + "_id": object_id}).select_related("history_user").order_by("-history_date", "-history_id")
             related_count += stream.count()
             for record in stream[:self.audit_page_size]:

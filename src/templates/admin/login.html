@@ -1,0 +1,54 @@
+{% extends "admin/login.html" %}
+{% load i18n static %}
+
+{% block bodyclass %}{{ block.super }} itam-auth{% endblock %}
+{% block extrahead %}{{ block.super }}<script src="{% static 'itam/password.js' %}" defer></script>{% endblock %}
+
+{% block header %}{% include 'admin/itam/auth_brand.html' %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="itam-auth-intro">
+  <h1>Iniciar sesión</h1>
+  <p>Ingresa con tu cuenta de ITAM para acceder al sistema.</p>
+</div>
+
+{% if form.errors and not form.non_field_errors %}
+<p class="errornote" role="alert">{% translate "Please correct the errors below." %}</p>
+{% endif %}
+{% for error in form.non_field_errors %}<p class="errornote" role="alert">{{ error }}</p>{% endfor %}
+{% if user.is_authenticated %}
+<p class="errornote">Tu cuenta actual no tiene acceso a esta página. Puedes iniciar sesión con otra cuenta.</p>
+{% endif %}
+
+<form action="{{ app_path }}" method="post" id="login-form">
+  {% csrf_token %}
+  <div class="form-row">
+    {{ form.username.errors }}
+    {{ form.username.label_tag }} {{ form.username }}
+  </div>
+  <div class="form-row">
+    {{ form.password.errors }}
+    <div class="itam-password-label">
+      {{ form.password.label_tag }}
+      <a href="{% url 'admin_password_reset' %}">¿Olvidaste tu contraseña?</a>
+    </div>
+    <div class="itam-password-field">
+      {{ form.password }}
+      <button type="button" data-itam-password-toggle aria-controls="{{ form.password.id_for_label }}"
+              aria-label="Mostrar contraseña" aria-pressed="false" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"/>
+          <circle cx="12" cy="12" r="2.5"/>
+          <path class="itam-password-slash" d="M4 4l16 16"/>
+        </svg>
+      </button>
+    </div>
+    <input type="hidden" name="next" value="{{ next }}">
+  </div>
+  <div class="submit-row"><input type="submit" value="{% translate 'Log in' %}"></div>
+</form>
+
+<p class="itam-auth-return"><a href="{% url 'itam_landing' %}">Volver a la portada</a></p>
+{% endblock %}

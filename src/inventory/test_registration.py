@@ -8,7 +8,8 @@ from django.db import IntegrityError, close_old_connections, transaction
 from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
-from accounts.models import User
+from accounts.models import Role, User
+from accounts.test_access_profiles import support_operator
 from assignments.services import create_assignment
 from employees.models import Employee
 from organizations.models import Company
@@ -21,7 +22,7 @@ class AssetRegistrationTests(TestCase):
         self.owner = Company.objects.create(name='Acepalma', code='ACE')
         self.other = Company.objects.create(name='Solutrans', code='SOL')
         self.category = Category.objects.create(name='Portátil', group=AssetGroup.COMPUTING)
-        self.user = User.objects.create_superuser(username='registration_operator', password='Test-4826!')
+        self.user = User.objects.create_superuser(username='registration_operator', password='Test-4826!', role=Role.ADMINISTRATOR)
         self.client.force_login(self.user)
 
     def create(self, **kwargs):
@@ -118,6 +119,8 @@ class AssetRegistrationTests(TestCase):
         self.assertEqual(Category.objects.get(name='Radioteléfono').history.count(), 1)
 
     def test_new_admin_registration_generates_code_and_audits_actor(self):
+        self.user = support_operator(self.user)
+        self.client.force_login(self.user)
         data = {'group': AssetGroup.COMPUTING, 'category': str(self.category.pk), 'company': str(self.other.pk), 'owner_company': str(self.owner.pk), 'legacy_asset_tag': 'PL-NEW', 'property_type': 'OWNED', 'status': 'AVAILABLE', '_save': 'Guardar'}
         for prefix in ('specs', 'network', 'warranties'):
             data.update({prefix + '-TOTAL_FORMS': '0', prefix + '-INITIAL_FORMS': '0', prefix + '-MIN_NUM_FORMS': '0', prefix + '-MAX_NUM_FORMS': '1000'})

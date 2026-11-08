@@ -57,4 +57,4 @@ altas nuevas contra versiones anteriores a la migración que habilitó su seguim
 
 Las escrituras SQL externas y operaciones masivas que omitan las utilidades de
 history requieren su propia estrategia de trazabilidad. El diagnóstico no demuestra
-protección contra esas escrituras. La evidencia de pruebas está en `estado-proyecto.md`.
+protección contra esas escrituras. La evidencia de pruebas está en la bitácora interna.

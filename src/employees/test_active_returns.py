@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import Role, User
+from accounts.test_access_profiles import support_operator
 from assignments.models import AssignmentStatus, OffboardingRecord, ReturnReason
 from assignments.services import create_assignment
 from inventory.models import Asset, AssetStatus, Category
@@ -20,7 +21,7 @@ class ActiveReturnsTests(TestCase):
         media = TemporaryDirectory()
         self.addCleanup(media.cleanup)
         self.enterContext(self.settings(MEDIA_ROOT=media.name))
-        self.user = User.objects.create_superuser(username="return_operator", password=None)
+        self.user = User.objects.create_superuser(username="return_operator", password=None, role=Role.ADMINISTRATOR)
         self.company = Company.objects.create(name="Compañía de prueba", code="RET")
         self.category = Category.objects.create(name="Equipo de prueba")
         self.employee = Employee.objects.create(company=self.company, full_name="Empleado de prueba")
@@ -39,6 +40,8 @@ class ActiveReturnsTests(TestCase):
                                  initial_condition="Buen estado")
 
     def test_one_pdf_contains_all_selected_assets_and_keeps_employee_active(self):
+        self.user = support_operator(self.user)
+        self.client.force_login(self.user)
         from inventory import offboarding_pdf
 
         self.assertContains(self.client.get(reverse("admin:employees_employee_changelist")), self.url)

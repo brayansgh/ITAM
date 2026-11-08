@@ -1,0 +1,21 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Sesión cerrada | ITAM{% endblock %}
+{% block bodyclass %}{{ block.super }} login itam-auth{% endblock %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'admin/css/login.css' %}">{% endblock %}
+{% block header %}{% include 'admin/itam/auth_brand.html' %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block usertools %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="itam-auth-intro">
+  <h1>Sesión cerrada</h1>
+  <p>Puedes volver a iniciar sesión cuando lo necesites.</p>
+</div>
+<a class="button itam-auth-action" href="{% url 'admin:login' %}">Volver a iniciar sesión</a>
+<p class="itam-auth-return"><a href="{% url 'itam_landing' %}">Volver a la portada</a></p>
+{% endblock %}

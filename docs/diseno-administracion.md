@@ -39,12 +39,6 @@ El formulario filtra los tipos por grupo y valida en servidor su correspondencia
 
 La importación `process_approved` exige `--owner-code ACE` o `--owner-code SOL` por lote, sin inferir propiedad de la administradora, y exige tipos clasificados. Reutiliza la generación del modelo. No se ejecutó ninguna importación durante este despliegue.
 
-## Datos anteriores
-
-Se conservaron los 352 activos y sus relaciones. Los 341 registros sin propietaria siguen sin propietaria; no se asignó una por inferencia. Las categorías anteriores permanecen sin grupo y se identifican como legadas. Su revisión es una tarea de datos independiente.
-
-El usuario autorizó diferenciar las placas repetidas. Se conservaron seis placas originales y se añadieron sufijos `-DUP-0001` a las seis repeticiones editables, comprobando colisiones. En el grupo con un activo dado de baja se conservó la placa de ese registro bloqueado. Se añadieron seis versiones de auditoría, con motivo explícito y sin inventar responsable. El respaldo previo conserva los valores anteriores; no se reconstruyeron eventos pasados.
-
 ## Logo
 
 - Original conservado: `src/static/img/palma.png`.
@@ -53,7 +47,7 @@ El usuario autorizó diferenciar las placas repetidas. Se conservaron seis placa
 
 ## Verificación
 
-La ejecución y los límites están registrados en `docs/estado-proyecto.md`. Los respaldos son privados y están excluidos de Git. No se cambiaron Nginx, Docker Compose, DEBUG ni el servidor de aplicación; el endurecimiento de infraestructura sigue siendo una tarea separada.
+La ejecución y los límites están registrados en la bitácora interna. Los respaldos son privados y están excluidos de Git. No se cambiaron Nginx, Docker Compose, DEBUG ni el servidor de aplicación; el endurecimiento de infraestructura sigue siendo una tarea separada.
 
 ## Pulido del dashboard — 6 de noviembre de 2026
 

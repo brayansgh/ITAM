@@ -97,10 +97,23 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 
 # --- POLÍTICAS DE SEGURIDAD ISO 27001 ---
-# Expiración de sesión por inactividad (15 minutos = 900 segundos)
-SESSION_COOKIE_AGE = 900
+# Cinco minutos desde la última actividad.
+SESSION_COOKIE_AGE = 300
+SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 # Protección contra robo de sesiones (XSS)
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
+
+# Recuperación de contraseña por correo corporativo.
+EMAIL_HOST = env('EMAIL_HOST', default='')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=not EMAIL_USE_SSL)
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='')
+ITAM_PASSWORD_RESET_ENABLED = bool(EMAIL_HOST and DEFAULT_FROM_EMAIL)
+PASSWORD_RESET_TIMEOUT = 3600

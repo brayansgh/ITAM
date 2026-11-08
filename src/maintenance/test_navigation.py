@@ -2,7 +2,8 @@ from html.parser import HTMLParser
 from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import Permission
-from accounts.models import User
+from accounts.models import Role, User
+from accounts.test_access_profiles import support_operator
 from inventory.models import Asset, Category
 from organizations.models import Company
 from .models import MaintenanceRecord, MaintenanceStatus, MaintenanceType
@@ -10,7 +11,7 @@ from .models import MaintenanceRecord, MaintenanceStatus, MaintenanceType
 
 class TicketNavigationTests(TestCase):
     def setUp(self):
-        self.user=User.objects.create_superuser(username="ticket_navigator",password="Test-4826!")
+        self.user=User.objects.create_superuser(username="ticket_navigator", password="Test-4826!", role=Role.ADMINISTRATOR)
         company=Company.objects.create(name="Empresa",code="NAV")
         category=Category.objects.create(name="Equipo")
         self.asset=Asset.objects.create(asset_tag="NAV-001",company=company,category=category)
@@ -123,6 +124,8 @@ class TicketNavigationTests(TestCase):
 
 
     def test_decommission_can_upload_evidence_and_complete_in_one_submit(self):
+        self.user = support_operator(self.user)
+        self.client.force_login(self.user)
         from tempfile import TemporaryDirectory
         from django.core.files.uploadedfile import SimpleUploadedFile
         from inventory.models import AssetStatus

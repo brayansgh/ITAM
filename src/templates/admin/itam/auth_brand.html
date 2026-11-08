@@ -1,0 +1,14 @@
+{% load static %}
+<div class="itam-login-theme">{% include 'itam_theme_picker.html' %}</div>
+<header class="itam-auth-brand">
+  <a class="itam-brand" href="{% url 'itam_landing' %}">
+    <img src="{% static 'img/palma.png' %}" alt="">
+    <span>C.I. ACEPALMA</span>
+  </a>
+  <div class="itam-auth-brand-copy">
+    <p class="itam-auth-kicker">Portal interno · ITAM</p>
+    <p class="itam-auth-brand-title">Gestión de activos tecnológicos</p>
+    <p>Consulta el inventario y sigue el ciclo de vida de los activos, desde la asignación hasta la baja.</p>
+  </div>
+  <p class="itam-auth-brand-footer">C.I. Acepalma S.A. · Dirección de Tecnología</p>
+</header>

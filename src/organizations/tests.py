@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
 from django.forms import modelform_factory
 from accounts.models import User
 from assignments.models import Assignment, AssignmentStatus
@@ -223,3 +224,25 @@ class OrganizationIntegrityTests(TestCase):
         self.site.refresh_from_db()
         self.assertEqual(self.site.name,"Ubicación actualizada")
         self.assertEqual(self.site.company_id,self.company.pk)
+
+
+class CompanyAdminTests(TestCase):
+    def test_company_change_confirmation_uses_feminine_article(self):
+        self.client.force_login(User.objects.create_superuser(username="company_operator"))
+        company = Company.objects.create(name="Compañía inicial", code="TEST")
+        change_url = reverse("admin:organizations_company_change", args=[company.pk])
+
+        response = self.client.post(change_url, {
+            "name": "Compañía <editada>",
+            "code": company.code,
+            "status": company.status,
+            "_save": "Guardar",
+        }, follow=True)
+
+        self.assertRedirects(response, reverse("admin:organizations_company_changelist"))
+        self.assertContains(
+            response,
+            f'La compañía “<a href="{change_url}">Compañía &lt;editada&gt;</a>” se cambió correctamente.',
+        )
+        company.refresh_from_db()
+        self.assertEqual(company.name, "Compañía <editada>")

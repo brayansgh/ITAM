@@ -7,6 +7,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from accounts.models import Role, User
+from accounts.test_access_profiles import support_operator
 from assignments.models import AssignmentStatus, OffboardingRecord, OffboardingRecordItem
 from assignments.services import create_assignment
 from inventory.models import Asset, AssetStatus, Category
@@ -16,7 +17,7 @@ from .models import Employee, EmployeeStatus
 
 class OffboardingAuthorizationTests(TestCase):
     def setUp(self):
-        self.operator = User.objects.create_superuser(username="offboarding_operator", password="Test-4826!")
+        self.operator = User.objects.create_superuser(username="offboarding_operator", password="Test-4826!", role=Role.ADMINISTRATOR)
         company = Company.objects.create(name="Prueba", code="SEC")
         category = Category.objects.create(name="Prueba")
         self.employee = Employee.objects.create(company=company, full_name="Persona de prueba")
@@ -66,7 +67,7 @@ class OffboardingAuthorizationTests(TestCase):
                 self.assertEqual(self.client.get(self.url).status_code, 200)
 
     def test_technology_can_return_assets_and_preserve_audit(self):
-        user = self.user(Role.TECHNOLOGY, True)
+        user = support_operator(self.operator)
         self.client.force_login(user)
         with patch("inventory.offboarding_pdf.generate_and_save_offboarding_pdf",
                    return_value=HttpResponse(b"%PDF synthetic", content_type="application/pdf")) as pdf:

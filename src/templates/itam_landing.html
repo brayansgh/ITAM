@@ -1,0 +1,41 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gestión de activos tecnológicos | Acepalma ITAM</title>
+  <link rel="icon" href="{% static 'img/palma-cabecera.png' %}">
+  <script src="{% static 'itam/theme.js' %}?v=20261108-2"></script>
+  <link rel="stylesheet" href="{% static 'itam/theme.css' %}?v=20261108-2">
+<link rel="stylesheet" href="{% static 'itam/landing.css' %}?v=20261108-2">
+</head>
+<body class="itam-entry">
+  <header class="entry-header">
+    <img src="{% static 'img/palma.png' %}" alt="">
+    <span class="entry-wordmark">C.I. ACEPALMA<small>ITAM</small></span>
+    {% include 'itam_theme_picker.html' %}
+  </header>
+  <main class="entry-main" aria-labelledby="itam-entry-title">
+    <section>
+      <p class="entry-eyebrow">Portal interno</p>
+      <h1 id="itam-entry-title">Gestión de activos tecnológicos</h1>
+      <p class="entry-intro">Consulta el inventario y sigue el ciclo de vida de los activos, desde la asignación hasta la baja.</p>
+      {% if request.user.is_active and request.user.is_staff %}
+      <a class="entry-access" href="{% url 'admin:index' %}">Ir al panel <span aria-hidden="true">→</span></a>
+      {% else %}
+      <a class="entry-access" href="{% url 'admin:login' %}?next={% url 'admin:index' %}">Iniciar sesión <span aria-hidden="true">→</span></a>
+      {% endif %}
+      <p class="entry-note">Acceso para personal autorizado.</p>
+    </section>
+    <section class="entry-scope" aria-labelledby="itam-entry-scope">
+      <h2 id="itam-entry-scope">En ITAM</h2>
+      <ul>
+        <li><span class="entry-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="12" rx="2"/><path d="M2 20h20"/></svg></span>Inventario de activos</li>
+        <li><span class="entry-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h14m-4-4 4 4-4 4M17 17H3m4-4-4 4 4 4"/></svg></span>Asignaciones y devoluciones</li>
+        <li><span class="entry-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6 4 4 3-3a6 6 0 0 1-7 8l-6 6a2 2 0 0 1-3-3l6-6a6 6 0 0 1 7-8l-4 2Z"/></svg></span>Mantenimiento y bajas</li>
+      </ul>
+    </section>
+  </main>
+  <footer><span>C.I. Acepalma S.A.</span><span>Dirección de Tecnología</span></footer>
+</body>
+</html>

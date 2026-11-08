@@ -1,3 +1,34 @@
+function keepSessionWhileActive(endpoint) {
+  const interval = 15000;
+  let lastRefresh = -Infinity;
+  let scheduledRefresh;
+
+  function refresh() {
+    scheduledRefresh = undefined;
+    if (document.visibilityState !== 'visible') return;
+    lastRefresh = performance.now();
+    fetch(endpoint, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+      signal: AbortSignal.timeout(10000),
+    }).catch(() => {
+      // Guardar comprueba la sesión y muestra un aviso si se perdió.
+    });
+  }
+
+  function onActivity(event) {
+    if (!event.isTrusted || document.visibilityState !== 'visible' || scheduledRefresh !== undefined) return;
+    const delay = interval - (performance.now() - lastRefresh);
+    if (delay <= 0) refresh();
+    else scheduledRefresh = window.setTimeout(refresh, delay);
+  }
+
+  for (const type of ['pointerdown', 'keydown', 'input', 'change', 'wheel']) {
+    document.addEventListener(type, onActivity, {capture: true, passive: true});
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-itam-filter]').forEach(select => select.addEventListener('change', () => {
     window.location.assign(select.value);
@@ -24,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tab && !pdfLink) tab.close();
   }
   const tokenEndpoint = document.querySelector('meta[name="itam-form-token-url"]')?.content;
+  if (tokenEndpoint) keepSessionWhileActive(tokenEndpoint);
   document.querySelectorAll('form').forEach(form => {
     const trackChanges = ['asset_form', 'employee_form', 'maintenancerecord_form'].includes(form.id);
     let changed = false;
@@ -104,6 +136,17 @@ document.addEventListener('DOMContentLoaded', () => {
         else form.requestSubmit();
         // Si la validación nativa impidió el envío, no reutilizar el token después.
         refreshed = false;
+      }
+    });
+  });
+});
+
+window.addEventListener('load', () => {
+  // Django actualiza el enlace en el fieldset antes de este listener.
+  document.querySelectorAll('.app-accounts.model-user.change-form fieldset.collapse').forEach(fieldset => {
+    fieldset.addEventListener('click', event => {
+      if (event.target.matches('.collapse-toggle') && event.target.textContent === 'Esconder') {
+        event.target.textContent = 'Ocultar';
       }
     });
   });
