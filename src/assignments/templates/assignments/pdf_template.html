@@ -25,16 +25,11 @@
 </head>
 <body>
 
-    <table class="header-table">
-        <tr>
-            <td class="text-center" width="25%"><img src="{{ logo_acepalma }}" alt="Acepalma"></td>
-            <th class="text-center" width="50%">CONTROL Y ENTREGA DE ACTIVOS TECNOLÓGICOS<br>{% if consolidated %}ACTA CONSOLIDADA{% else %}ACTA DE ENTREGA{% endif %}</th>
-            <td class="text-center" width="25%">
-                <img src="{{ logo_solutrans }}" alt="Solutrans"><br>
-                <span style="font-size:8px;">GI-FR-05<br>Versión 001</span>
-            </td>
-        </tr>
-    </table>
+    {% if consolidated %}
+        {% include "assignments/pdf_header.html" with act_title="ACTA CONSOLIDADA" show_corporate_title=True %}
+    {% else %}
+        {% include "assignments/pdf_header.html" with act_title="ACTA DE ENTREGA" show_corporate_title=True %}
+    {% endif %}
 
     <table>
         <tr class="bg-gray bold text-center">
@@ -53,19 +48,16 @@
 
     <table>
         <tr class="bg-gray bold text-center">
-            <td width="20%">ELEMENTO</td><td width="20%">ACTIVO FIJO</td>
-            <td width="20%">MARCA</td><td width="20%">MODELO</td><td width="20%">SERIAL</td>
+            <td width="16%">ELEMENTO</td><td width="16%">ACTIVO FIJO</td>
+            <td width="16%">CÓDIGO INTERNO</td><td width="14%">MARCA</td>
+            <td width="18%">MODELO</td><td width="20%">SERIAL</td>
         </tr>
         {% for asg in assignments %}
         <tr class="text-center">
-            <td>{{ asg.asset.category.name|upper }}</td>
-            <td>{{ asg.asset.legacy_asset_tag|default:asg.asset.asset_tag|upper }}</td>
-            <td>{{ asg.asset.brand.name|upper|default:"N/A" }}</td>
-            <td>{{ asg.asset.model.name|upper|default:"N/A" }}</td>
-            <td>{{ asg.asset.serial_number|upper|default:"N/A" }}</td>
+            {% include "assignments/pdf_asset_cells.html" with asset=asg.asset only %}
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="text-center">No hay activos registrados.</td></tr>
+        <tr><td colspan="6" class="text-center">No hay activos registrados.</td></tr>
         {% endfor %}
     </table>
 
@@ -82,7 +74,7 @@
         {% endif %}
         <tr>
             <td class="bg-gray bold text-center">OBSERVACIONES</td>
-            <td>{{ observations|default:"ENTREGA DE ELEMENTOS TECNOLÓGICOS"|upper }}</td>
+            <td>{{ observations|default:"ENTREGA DE ELEMENTOS TECNOLÓGICOS"|linebreaksbr }}</td>
         </tr>
     </table>
 
@@ -108,7 +100,7 @@
         <tr>
             <td>
                 <br><br><br>___________________________________<br><br>
-                <b>{{ assigned_by.get_full_name|default:assigned_by.username|upper }}</b>
+                <b>{{ assigned_by.get_display_name|default:"Sin responsable registrado"|upper }}</b>
             </td>
             <td>
                 <br><br><br>___________________________________<br><b>{{ employee.full_name|upper }}</b><br>

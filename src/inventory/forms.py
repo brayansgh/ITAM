@@ -71,6 +71,12 @@ class AssetWithAssignmentForm(AssetRegistrationForm):
     assignment_condition = forms.CharField(
         label='Condición de entrega', widget=forms.Textarea(attrs={'rows': 3}), required=False,
     )
+    assignment_observations = forms.CharField(
+        label='Observaciones / Pérdida / Daños',
+        help_text='Este texto aparecerá en el acta de entrega.',
+        widget=forms.Textarea(attrs={'rows': 3}),
+        required=False,
+    )
 
     def clean(self):
         data = super().clean()

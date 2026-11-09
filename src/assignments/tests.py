@@ -1,8 +1,10 @@
 import tempfile
 import uuid
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
+from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase, TransactionTestCase
 
 from accounts.models import User
@@ -18,6 +20,63 @@ from assignments.admin import AssignmentAdmin
 from django.urls import reverse
 from django.core.files.base import ContentFile
 from django.test import override_settings
+
+
+class ActPDFTemplateTests(SimpleTestCase):
+    def test_identifiers_observations_and_signatures(self):
+        asset = SimpleNamespace(
+            category=SimpleNamespace(name="Equipo de prueba"),
+            asset_tag="ACE-0042",
+            legacy_asset_tag="PL-0042",
+        )
+        assignment = SimpleNamespace(asset=asset, condition="Operativo", observations="Nota particular")
+        context = {
+            "assignments": [assignment],
+            "observations": "Nota general",
+            "logo_acepalma": "logo-ace.png",
+            "logo_solutrans": "logo-sol.png",
+        }
+        for kind, title, signatures in (
+            ("delivery", "ACTA DE ENTREGA", 2),
+            ("consolidated", "ACTA CONSOLIDADA", 2),
+            ("offboarding", "ACTA DE DESVINCULACIÓN", 3),
+            ("return", "ACTA DE DEVOLUCIÓN DE ACTIVOS", 2),
+        ):
+            with self.subTest(kind=kind):
+                if kind in ("delivery", "consolidated"):
+                    template = "assignments/pdf_template.html"
+                    context["consolidated"] = kind == "consolidated"
+                else:
+                    template = "assignments/offboarding_pdf.html"
+                    context["record"] = SimpleNamespace(
+                        return_reason="DAMAGE" if kind == "return" else "",
+                        get_return_reason_display="Daño",
+                    )
+                html = render_to_string(template, context)
+                self.assertIn(title, html)
+                self.assertIn('src="logo-ace.png"', html)
+                self.assertIn('src="logo-sol.png"', html)
+                self.assertRegex(html, r"ACTIVO FIJO</t[dh]>\s*<t[dh][^>]*>CÓDIGO INTERNO")
+                self.assertRegex(html, r"<td>PL-0042</td>\s*<td>ACE-0042</td>")
+                self.assertEqual(html.count('class="signature-title"'), signatures)
+
+                if kind == "delivery":
+                    self.assertIn("Nota general", html)
+                    self.assertIn("ENTREGA DE ELEMENTOS TECNOLÓGICOS",
+                                  render_to_string(template, {**context, "observations": None}))
+                if kind in ("offboarding", "return"):
+                    assets, signatures_table = html.split('<table class="signature-table">')
+                    self.assertIn("Nota general", assets)
+                    self.assertNotIn("Nota general", signatures_table)
+                    before_notes, notes = assets.split("OBSERVACIONES GENERALES")
+                    self.assertNotIn("Nota particular", before_notes)
+                    self.assertEqual("Nota particular" in notes, kind == "offboarding")
+                    self.assertEqual("CHECKLIST DE DESVINCULACIÓN" in html, kind == "offboarding")
+
+                asset.legacy_asset_tag = None
+                html = render_to_string(template, context)
+                self.assertRegex(html, r"<td>—</td>\s*<td>ACE-0042</td>")
+                asset.legacy_asset_tag = "PL-0042"
 
 
 class ReturnAssignmentTests(TestCase):

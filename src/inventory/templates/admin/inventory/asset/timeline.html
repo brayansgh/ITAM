@@ -24,7 +24,7 @@
     {% for event in asset_timeline.rows %}
       <li class="itam-timeline-event itam-timeline-{{ event.event_kind }}">
         <span class="itam-timeline-marker" aria-hidden="true">
-          {% if event.event_kind == 'assignment' %}↗{% elif event.event_kind == 'return' %}↩{% else %}🔧{% endif %}
+          {% if event.event_kind == 'assignment' %}↗{% elif event.event_kind == 'return' %}↩{% elif event.event_kind == 'decommission' %}↓{% else %}🔧{% endif %}
         </span>
         <article class="itam-timeline-card">
           <header class="itam-timeline-heading">

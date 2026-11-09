@@ -200,6 +200,7 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
             employee_id=obj.employee_id,
             assigned_by=request.user,
             initial_condition=obj.initial_condition,
+            observations=obj.observations,
         )
 
         obj.pk = assignment.pk

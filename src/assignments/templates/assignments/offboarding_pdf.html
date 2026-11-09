@@ -90,39 +90,30 @@
             vertical-align: middle !important;
         }
 
+        .signature-table {
+            table-layout: fixed;
+            break-inside: avoid;
+        }
+
+        .signature-line {
+            width: 70%;
+            border-top: 1px solid #000;
+            margin: 0 auto 6px;
+        }
+
         .general-observations {
-            vertical-align: top !important;
-            text-align: left !important;
-            padding: 6px !important;
-            font-size: 9px;
-            line-height: 1.4;
+            overflow-wrap: break-word;
         }
     </style>
 </head>
 
 <body>
 
-    <!-- ENCABEZADO -->
-    <table class="header-table">
-        <tr>
-            <td class="text-center" width="25%">
-                <img src="{{ logo_acepalma }}" alt="Acepalma">
-            </td>
-
-            <th class="text-center" width="50%">
-                {% if record.return_reason %}ACTA DE DEVOLUCIÓN DE ACTIVOS{% else %}CONTROL Y ENTREGA DE ACTIVOS TECNOLÓGICOS{% endif %}
-            </th>
-
-            <td class="text-center" width="25%">
-                <img src="{{ logo_solutrans }}" alt="Solutrans">
-                <br>
-                <span style="font-size:8px;">
-                    GI-FR-05<br>
-                    Versión 001
-                </span>
-            </td>
-        </tr>
-    </table>
+    {% if record.return_reason %}
+        {% include "assignments/pdf_header.html" with act_title="ACTA DE DEVOLUCIÓN DE ACTIVOS" %}
+    {% else %}
+        {% include "assignments/pdf_header.html" with act_title="ACTA DE DESVINCULACIÓN" show_corporate_title=True %}
+    {% endif %}
 
     <!-- INFORMACIÓN DEL EMPLEADO -->
     <table>
@@ -156,11 +147,11 @@
             <tr class="bg-gray bold text-center">
                 <th width="14%">ELEMENTO</th>
                 <th width="16%">ACTIVO FIJO</th>
+                <th width="16%">CÓDIGO INTERNO</th>
                 <th width="12%">MARCA</th>
                 <th width="12%">MODELO</th>
                 <th width="14%">SERIAL</th>
                 <th width="16%">CONDICIÓN DE DEVOLUCIÓN</th>
-                <th width="16%">OBSERVACIONES</th>
             </tr>
         </thead>
 
@@ -168,47 +159,14 @@
             {% for asg in assignments %}
             <tr class="text-center">
 
-                <!-- Categoría del activo -->
-                <td>
-                    {{ asg.asset.category.name|upper }}
-                </td>
-
-                <!-- Código de activo fijo: campo indispensable -->
-                <td>
-                    {{ asg.asset.legacy_asset_tag|default:asg.asset.asset_tag|upper }}
-                </td>
-
-                <!-- Marca -->
-                <td>
-                    {{ asg.asset.brand.name|default:"N/A"|upper }}
-                </td>
-
-                <!-- Modelo -->
-                <td>
-                    {{ asg.asset.model.name|default:"N/A"|upper }}
-                </td>
-
-                <!-- Serial -->
-                <td>
-                    {{ asg.asset.serial_number|default:"N/A"|upper }}
-                </td>
-
-                <!-- Condición física al recibir -->
-                <td>
-                    {{ asg.condition|default:"N/A" }}
-                </td>
-
-                <!-- Observaciones particulares del activo -->
-                <td>
-                    {{ asg.observations|default:"N/A" }}
-                </td>
-
+                {% include "assignments/pdf_asset_cells.html" with asset=asg.asset only %}
+                <td>{{ asg.condition|default:"N/A" }}</td>
             </tr>
 
             {% empty %}
             <tr>
                 <td colspan="7" class="text-center">
-                    No hay activos registrados en esta devolución.
+                    No hay activos registrados en esta acta.
                 </td>
             </tr>
             {% endfor %}
@@ -220,7 +178,7 @@
     <table>
         <tr>
             <td width="20%" class="bg-gray bold text-center">
-                FECHA DE DEVOLUCIÓN
+                {% if record.return_reason %}FECHA DE DEVOLUCIÓN{% else %}FECHA DE REGISTRO{% endif %}
             </td>
 
             <td width="80%">
@@ -257,69 +215,48 @@
 
     {% endif %}
 
-    <!-- FIRMAS Y OBSERVACIONES GENERALES -->
-    <table class="signature-table">
-
+    <table>
         <tr>
-            <td class="signature-title" width="33%">
-                FIRMA DE EMPLEADO QUE DEVUELVE
-            </td>
-
-            <td class="signature-title" width="34%">
-                OBSERVACIONES GENERALES
-            </td>
-
-            <td class="signature-title" width="33%">
-                NOMBRE DE EMPLEADO (TEC) QUE RECIBE
+            <th width="20%" class="bg-gray text-center">OBSERVACIONES GENERALES</th>
+            <td class="general-observations">
+                {{ observations|default:"Sin observaciones generales"|linebreaksbr }}
+                {% if not record.return_reason %}
+                    {% for asg in assignments %}
+                        {% if asg.observations %}
+                        <br><strong>{{ asg.asset.asset_tag|upper }}</strong> · {{ asg.observations|linebreaksbr }}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
             </td>
         </tr>
+    </table>
 
+    <table class="signature-table">
+        <tr>
+            <td class="signature-title">FIRMA DE EMPLEADO QUE DEVUELVE</td>
+            <td class="signature-title">FIRMA DE EMPLEADO (TEC) QUE RECIBE</td>
+            {% if not record.return_reason %}
+            <td class="signature-title">FIRMA DE EMPLEADO DE TALENTO HUMANO</td>
+            {% endif %}
+        </tr>
         <tr>
             <td>
-                <br><br><br>
-                ___________________________________<br><br>
-
+                <div class="signature-line"></div>
                 <b>{{ employee.full_name|upper }}</b><br>
                 C.C. {{ employee.document_number|default:"N/A" }}
             </td>
-
-            <td{% if not record.return_reason %} rowspan="3"{% endif %} class="general-observations">
-                {{ observations|default:"Sin observaciones"|linebreaksbr }}
-            </td>
-
             <td>
-                <br><br><br>
-                ___________________________________<br><br>
-
-                <b>
-                    {{ assigned_by.get_full_name|default:assigned_by.username|upper }}
-                </b>
+                <div class="signature-line"></div>
+                <b>{{ assigned_by.get_display_name|default:"Sin responsable registrado"|upper }}</b><br>
+                &nbsp;
             </td>
-        </tr>
-
-        {% if not record.return_reason %}
-        <tr>
-            <td class="signature-title"
-                style="border: none; background-color: transparent;">
-            </td>
-
-            <td class="signature-title">
-                EMPLEADO TALENTO HUMANO
-            </td>
-        </tr>
-
-        <tr>
-            <td style="border: none;"></td>
-
+            {% if not record.return_reason %}
             <td>
-                <br><br><br>
-                ___________________________________<br><br>
-
-                <b>FIRMA</b>
+                <div class="signature-line"></div>
+                <br>&nbsp;
             </td>
+            {% endif %}
         </tr>
-
-        {% endif %}
     </table>
 
 </body>

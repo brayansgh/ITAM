@@ -6,7 +6,7 @@ from django.urls import reverse
 
 def asset_timeline(request, asset, admin_site):
     from assignments.models import Assignment
-    from maintenance.models import MaintenanceRecord
+    from maintenance.models import MaintenanceRecord, MaintenanceType
     assignment_admin = admin_site._registry[Assignment]
     maintenance_admin = admin_site._registry[MaintenanceRecord]
     can_assignments = assignment_admin.has_view_permission(request)
@@ -42,9 +42,13 @@ def asset_timeline(request, asset, admin_site):
             obj = ticket_map.get(row["event_id"])
             if obj is None or not maintenance_admin.has_view_permission(request, obj):
                 continue
-            row.update(action="Mantenimiento registrado", person=str(obj.reported_by),
+            is_decommission = obj.type == MaintenanceType.DECOMMISSION
+            action = "Trámite de baja registrado" if is_decommission else "Mantenimiento registrado"
+            route = "admin:maintenance_decommission_change" if is_decommission else "admin:maintenance_maintenancerecord_change"
+            row.update(event_kind="decommission" if is_decommission else "maintenance",
+                       action=action, person=str(obj.reported_by),
                        detail=f"{obj.get_type_display()} · Estado actual: {obj.get_status_display()} · {obj.description}",
-                       url=reverse("admin:maintenance_maintenancerecord_change", args=[obj.pk]))
+                       url=reverse(route, args=[obj.pk]))
         else:
             obj = assignment_map.get(row["event_id"])
             if obj is None or not assignment_admin.has_view_permission(request, obj):

@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+from unittest.mock import patch
+
 from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.urls import reverse
@@ -5,8 +8,8 @@ from django.urls import reverse
 from accounts.models import User
 from assignments.models import Assignment
 from employees.models import Employee
-from inventory.models import Asset, Category, AssetGroup
-from maintenance.models import MaintenanceRecord, MaintenanceType
+from inventory.models import Asset, AssetStatus, Category, AssetGroup
+from maintenance.models import MaintenanceRecord, MaintenanceStatus, MaintenanceType
 from organizations.models import Company
 
 
@@ -303,6 +306,42 @@ class CorporateAdminTests(TestCase):
         ticket.save()
         self.assertEqual(len(self.client.get(reverse('admin:itam_decommissions'), {'estado': 'cancelados'}).context['rows']), 1)
         self.assertEqual(self.client.post(reverse('admin:maintenance_maintenancerecord_change', args=[ticket.pk]), {'description': 'forged'}).status_code, 403)
+
+    def test_definitive_decommissions_use_audited_transition_and_keep_unknown_dates(self):
+        later = Asset.objects.create(company=self.company, owner_company=self.company, category=self.category)
+        legacy = Asset.objects.create(company=self.company, owner_company=self.company, category=self.category)
+        Asset.objects.filter(pk=legacy.pk).update(status=AssetStatus.DECOMMISSIONED)
+        legacy.history.all().update(status=AssetStatus.DECOMMISSIONED)
+
+        url = reverse('admin:itam_decommissions')
+        opened_at = datetime(2026, 12, 1, 14, tzinfo=timezone.utc)
+        with patch('django.utils.timezone.now', return_value=opened_at):
+            tickets = [
+                MaintenanceRecord.objects.create(
+                    asset=asset, type=MaintenanceType.DECOMMISSION, reported_by=self.user,
+                    description='Trámite sintético',
+                )
+                for asset in (self.asset, later)
+            ]
+        pending = self.client.get(url)
+        self.assertEqual([row['date'] for row in pending.context['rows']], [opened_at, opened_at])
+        self.assertContains(pending, 'Fecha de registro')
+
+        first_date = opened_at.replace(hour=15)
+        second_date = opened_at.replace(hour=16)
+        for ticket, closed_at in zip(tickets, (first_date, second_date)):
+            with patch('django.utils.timezone.now', return_value=closed_at):
+                ticket.status = MaintenanceStatus.COMPLETED
+                ticket.resolution_notes = 'Cierre sintético documentado'
+                ticket.save(update_fields=['status', 'resolution_notes'])
+
+        response = self.client.get(url, {'estado': 'definitivas'})
+        self.assertContains(response, 'Fecha de baja')
+        self.assertContains(response, 'Sin fecha registrada', count=1)
+        self.assertEqual(
+            [(row['asset'].pk, row['date']) for row in response.context['rows']],
+            [(later.pk, second_date), (self.asset.pk, first_date), (legacy.pk, None)],
+        )
 
     def test_read_only_user_cannot_access_new_mutating_routes(self):
         viewer = User.objects.create_user(username='viewer', is_staff=True, role='OTHER')

@@ -75,7 +75,7 @@ def return_assignment(*, assignment_id, condition, returned_by=None):
 
     return assignment
 @transaction.atomic
-def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition):
+def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition, observations=None):
     """
     Crea una asignación y actualiza el estado del activo.
 
@@ -123,6 +123,7 @@ def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition):
         employee=employee,
         assigned_by=assigned_by,
         initial_condition=initial_condition,
+        observations=observations,
         status=AssignmentStatus.ACTIVE,
     )
 

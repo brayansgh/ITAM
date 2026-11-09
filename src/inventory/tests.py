@@ -202,10 +202,19 @@ class AssetCardTests(TestCase):
     def test_decommissioned_card_and_links_use_correct_proxy(self):
         from inventory.navigation import asset_link
         from core.testing import complete_decommission
-        complete_decommission(self.asset)
+        from django.urls import reverse
+
+        ticket = complete_decommission(self.asset)
         response = self.client.get(self.url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Ficha del activo")
+        self.assertContains(response, "Trámite de baja registrado")
+        self.assertNotContains(response, "Mantenimiento registrado")
+        row, = response.context["asset_timeline"]["rows"]
+        self.assertEqual(row["event_kind"], "decommission")
+        self.assertEqual(row["event_date"], ticket.created_at)
+        self.assertEqual(row["url"], reverse("admin:maintenance_decommission_change", args=[ticket.pk]))
+        self.assertEqual(self.client.get(row["url"]).status_code, 200)
         self.assertContains(response, "Cronología operativa", count=1)
         request = RequestFactory().get("/")
         request.user = self.user

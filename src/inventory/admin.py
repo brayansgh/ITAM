@@ -209,7 +209,7 @@ class AssetAdmin(StandardHistoryAdmin):
         fieldsets = super().get_fieldsets(request, obj)
         if self.can_assign_from_form(request, obj):
             return (*fieldsets, ('Asignación', {
-                'fields': ('assignment_employee', 'assignment_condition'),
+                'fields': ('assignment_employee', 'assignment_condition', 'assignment_observations'),
                 'classes': ('itam-registration-assignment',),
             }))
         return fieldsets
@@ -258,6 +258,7 @@ class AssetAdmin(StandardHistoryAdmin):
                 employee_id=form.cleaned_data['assignment_employee'].pk,
                 assigned_by=request.user,
                 initial_condition=form.cleaned_data['assignment_condition'],
+                observations=form.cleaned_data['assignment_observations'] or None,
             )
             form.instance.status = assignment.asset.status
             request.itam_saved_assignment = assignment.pk

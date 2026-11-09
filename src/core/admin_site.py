@@ -3,7 +3,7 @@ from django.contrib.admin import AdminSite
 from django.contrib.admin.apps import AdminConfig
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, F, OuterRef, Q, Subquery
 from django.db.models.functions import TruncMonth
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -266,15 +266,32 @@ class ITAMAdminSite(AdminSite):
                 return redirect(reverse('admin:itam_decommissions') + '?estado=definitivas')
             raise PermissionDenied
         qs = self.visible_queryset(request, model)
-        if kind != 'definitivas':
+        if kind == 'definitivas':
+            from inventory.models import Asset, AssetStatus
+
+            versions = Asset.history.model.objects.using(qs.db)
+            previous_status = versions.filter(id=OuterRef('id')).filter(
+                Q(history_date__lt=OuterRef('history_date'))
+                | Q(history_date=OuterRef('history_date'), history_id__lt=OuterRef('history_id'))
+            ).order_by('-history_date', '-history_id').values('status')[:1]
+            # Una primera versión que ya figura en baja no acredita una transición.
+            transitions = versions.filter(
+                id=OuterRef('pk'), status=AssetStatus.DECOMMISSIONED, history_type='~',
+            ).annotate(previous_status=Subquery(previous_status)).filter(
+                previous_status__isnull=False,
+            ).exclude(previous_status=AssetStatus.DECOMMISSIONED)
+            decommission_date = transitions.order_by('-history_date', '-history_id').values('history_date')[:1]
+            qs = qs.annotate(display_date=Subquery(decommission_date))
+        else:
             qs = qs.filter(type=MaintenanceType.DECOMMISSION, status__in=['CANCELLED'] if kind == 'cancelados' else ['OPEN', 'IN_PROGRESS'])
-        page = Paginator(qs.order_by('-created_at'), 25).get_page(request.GET.get('page'))
+            qs = qs.annotate(display_date=F('created_at'))
+        page = Paginator(qs.order_by(F('display_date').desc(nulls_last=True), '-pk'), 25).get_page(request.GET.get('page'))
         rows = []
         for obj in page:
             if ma.has_view_permission(request, obj):
                 asset = obj if kind == 'definitivas' else obj.asset
                 route = 'inventory_decommissionedasset' if kind == 'definitivas' else 'maintenance_decommission'
-                rows.append({'asset': asset, 'status': obj.get_status_display(), 'date': obj.created_at, 'url': reverse('admin:' + route + '_change', args=[obj.pk])})
+                rows.append({'asset': asset, 'status': obj.get_status_display(), 'date': obj.display_date, 'url': reverse('admin:' + route + '_change', args=[obj.pk])})
         can_create = self._registry[MaintenanceRecord].has_add_permission(request)
         tabs = [{'label': label, 'url': '?estado=' + key, 'active': kind == key} for key, label in [('tramite', 'En trámite'), ('definitivas', 'Bajas definitivas'), ('cancelados', 'Cancelados')] if self._registry[DecommissionedAsset if key == 'definitivas' else MaintenanceRecord].has_view_permission(request)]
         return self.page(request, 'admin/itam/decommissions.html', 'Bajas', tabs=tabs, rows=rows, page=page, kind=kind, can_create=can_create)

@@ -12,5 +12,8 @@ class User(AbstractUser):
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.CONSULTATION)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def get_display_name(self):
+        return self.get_full_name() or self.get_username()
+
     def __str__(self):
         return f"{self.username} - {self.get_role_display()}"

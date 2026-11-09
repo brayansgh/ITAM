@@ -12,6 +12,7 @@ from django.urls import reverse
 
 from accounts.models import Role, User
 from accounts.test_access_profiles import support_operator
+from assignments import utils as assignment_pdf
 from assignments.models import Assignment, AssignmentStatus
 from assignments.services import create_assignment
 from data_imports.models import ImportStatus, StagingAsset
@@ -216,6 +217,7 @@ class AssetRegistrationTests(TestCase):
         self.assertContains(page, 'itam-registration-assignment')
         response = self.client.post(url, self.assignment_registration_data(
             assignment_employee=employee.pk, assignment_condition='Equipo operativo',
+            assignment_observations='Se entrega con cargador',
         ))
         self.assertEqual(response.status_code, 302)
         assignment = Assignment.objects.get()
@@ -223,6 +225,7 @@ class AssetRegistrationTests(TestCase):
         self.assertEqual(assignment.employee, employee)
         self.assertEqual(assignment.assigned_by, support)
         self.assertEqual(assignment.initial_condition, 'Equipo operativo')
+        self.assertEqual(assignment.observations, 'Se entrega con cargador')
         self.assertEqual(assignment.asset.status, AssetStatus.ASSIGNED)
         self.assertEqual(assignment.history.first().history_user, support)
         confirmation = reverse('admin:assignments_assignment_act', args=[assignment.pk])
@@ -298,13 +301,26 @@ class AssetRegistrationTests(TestCase):
         self.assertContains(self.client.get(detail), 'Asignar activo')
         form = self.client.get(shortcut).context['adminform'].form
         self.assertEqual(str(form['asset'].value()), str(asset.pk))
+        self.assertContains(self.client.get(shortcut), 'Observaciones / Pérdida / Daños')
+        observations = 'Incluye cargador & cable.\nLeve rayón en la carcasa.'
         response = self.client.post(shortcut, {
-            'asset': asset.pk, 'employee': employee.pk, 'initial_condition': 'Operativo', '_save': 'Guardar',
+            'asset': asset.pk, 'employee': employee.pk, 'initial_condition': 'Operativo',
+            'observations': observations, '_save': 'Guardar',
         })
         assignment = asset.assignments.get()
+        self.assertEqual(assignment.observations, observations)
+        self.assertEqual(assignment.history.first().observations, observations)
         confirmation = reverse('admin:assignments_assignment_act', args=[assignment.pk])
         self.assertRedirects(response, confirmation + "?confirmada=1")
         self.assertContains(self.client.get(confirmation + '?confirmada=1'), 'data-open-on-load')
+        with patch.object(assignment_pdf, 'render_to_string', wraps=assignment_pdf.render_to_string) as rendered:
+            response = self.client.post(confirmation, {'mode': 'delivery'})
+        self.assertRedirects(response, confirmation)
+        assignment.refresh_from_db()
+        self.assertTrue(assignment.signed_act_pdf)
+        html = assignment_pdf.render_to_string(*rendered.call_args.args)
+        self.assertIn('Incluye cargador &amp; cable.<br>Leve rayón en la carcasa.', html)
+        self.assertNotIn('ENTREGA DE ELEMENTOS TECNOLÓGICOS', html)
         self.assertNotContains(self.client.get(detail), '>Asignar activo</a>')
 
     def test_edit_permission_alone_does_not_allow_setting_assigned(self):
