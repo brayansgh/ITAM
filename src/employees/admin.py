@@ -6,6 +6,7 @@ from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html
+from django.utils.http import urlencode
 
 
 from accounts.models import Role
@@ -17,7 +18,8 @@ from assignments.models import (
     OffboardingRecord,
     OffboardingRecordItem,
 )
-from assignments.services import ReturnPdfError, register_active_returns, return_assignment
+from assignments.services import ReturnPdfError, discard_return_pdf, register_active_returns, return_assignment
+from inventory.models import Asset
 
 from .models import Employee, EmployeeStatus, RetiredEmployee
 
@@ -44,6 +46,14 @@ class EmployeeAdmin(StandardHistoryAdmin):
             context['can_employee_custody'] = aa.has_view_permission(request)
             if context['employee_detail']:
                 context["employee_documents"] = self.employee_documents(request, obj, assignments, aa)
+                if self.has_view_history_or_change_history_permission(request, obj):
+                    context['employee_history_url'] = reverse('admin:employees_employee_history', args=[obj.pk])
+                if (obj.status != EmployeeStatus.RETIRO
+                        and aa.has_add_permission(request)
+                        and self.admin_site.get_model_admin(Asset).has_view_permission(request)):
+                    context['employee_assignment_url'] = (
+                        reverse('admin:assignments_assignment_add') + '?' + urlencode({'employee': obj.pk})
+                    )
 
             if (context['employee_detail'] and obj.status == EmployeeStatus.ACTIVE
                     and self.can_process_offboarding(request, obj)
@@ -67,6 +77,14 @@ class EmployeeAdmin(StandardHistoryAdmin):
         return sorted(documents, key=lambda document: document["date"], reverse=True)
 
     search_fields = ("full_name", "document_number")
+
+    def get_search_results(self, request, queryset, search_term):
+        if (getattr(getattr(request, 'resolver_match', None), 'url_name', None) == 'autocomplete'
+                and request.GET.get('app_label') == 'assignments'
+                and request.GET.get('model_name') == 'assignment'
+                and request.GET.get('field_name') == 'employee'):
+            queryset = queryset.exclude(status=EmployeeStatus.RETIRO).order_by('full_name', 'pk')
+        return super().get_search_results(request, queryset, search_term)
 
     list_display = (
         "full_name",
@@ -117,7 +135,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
         )
 
         return format_html(
-            '<a class="button" href="{}">Ver Activos</a>',
+            '<a class="itam-table-action" href="{}">Ver Activos</a>',
             url,
         )
 
@@ -134,11 +152,11 @@ class EmployeeAdmin(StandardHistoryAdmin):
             return "—"
         if not has_pending_assets:
             return format_html(
-                '<span style="color:green;font-weight:bold;">Completada</span>'
+                '<span class="itam-label itam-status-success">Completada</span>'
             )
 
         if obj.status == EmployeeStatus.ACTIVE:
-            return format_html('<a class="button" href="{}">Devolver activos</a>',
+            return format_html('<a class="itam-table-action" href="{}">Devolver activos</a>',
                                reverse("admin:employees_employee_return_assets", args=[obj.pk]))
 
         url = reverse(
@@ -147,7 +165,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
         )
 
         return format_html(
-            '<a class="button" href="{}">Procesar devolución</a>',
+            '<a class="itam-table-action" href="{}">Procesar devolución</a>',
             url,
         )
 
@@ -274,6 +292,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
                         for item_form in selected_forms
                     ]
 
+                    record = None
                     try:
                         with transaction.atomic():
 
@@ -332,25 +351,20 @@ class EmployeeAdmin(StandardHistoryAdmin):
 
                             try:
                                 generate_and_save_offboarding_pdf(record)
-                                return self.return_receipt_redirect(request, record)
-
                             except Exception as error:
-                                messages.error(
-                                    request,
-                                    "La devolución se registró, "
-                                    f"pero ocurrió un error al generar "
-                                    f"el PDF: {error}",
-                                )
+                                raise ReturnPdfError from error
 
-                                return redirect(
-                                    reverse(
-                                        "admin:employees_employee_change",
-                                        args=[employee.pk],
-                                    )
-                                )
-
+                    except ReturnPdfError:
+                        discard_return_pdf(record)
+                        messages.error(request, "No se pudo generar el acta. La devolución no se registró.")
                     except ValidationError as error:
+                        discard_return_pdf(record)
                         messages.error(request, str(error))
+                    except Exception:
+                        discard_return_pdf(record)
+                        raise
+                    else:
+                        return self.return_receipt_redirect(request, record)
 
         else:
             form = OffboardingForm()
@@ -457,6 +471,6 @@ class RetiredEmployeeAdmin(admin.ModelAdmin):
         )
 
         return format_html(
-            '<a class="button" href="{}">Ver actas</a>',
+            '<a class="itam-table-action" href="{}">Ver actas</a>',
             url,
         )

@@ -104,6 +104,9 @@ def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition):
             "El activo no está disponible para una nueva asignación."
         )
 
+    if asset.assignments.filter(status=AssignmentStatus.ACTIVE).exists():
+        raise ValidationError("El activo ya tiene una asignación vigente.")
+
     # 4. Comprobar que exista el empleado.
     try:
         employee = Employee.objects.select_for_update().get(pk=employee_id)
@@ -181,8 +184,6 @@ def link_return_to_decommission(*, item, actor, authorize):
 
 def register_active_returns(*, employee, assignments, reason, condition, observations, actor,
                             authorize_decommission=None):
-    import logging
-
     from employees.models import EmployeeStatus
     from inventory.offboarding_pdf import generate_and_save_offboarding_pdf
     from .models import OffboardingRecord, OffboardingRecordItem, ReturnReason
@@ -226,9 +227,15 @@ def register_active_returns(*, employee, assignments, reason, condition, observa
                 raise ReturnPdfError from error
         return record, tickets
     except Exception:
-        if record and record.pdf:
-            try:
-                record.pdf.storage.delete(record.pdf.name)
-            except Exception:
-                logging.getLogger(__name__).warning("No se pudo retirar el PDF de una devolución revertida.")
+        discard_return_pdf(record)
         raise
+
+
+def discard_return_pdf(record):
+    import logging
+
+    if record and record.pdf:
+        try:
+            record.pdf.storage.delete(record.pdf.name)
+        except Exception:
+            logging.getLogger(__name__).warning("No se pudo retirar el PDF de una devolución revertida.")

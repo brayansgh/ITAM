@@ -1,0 +1,131 @@
+.itam-employee-profile-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 24px;
+}
+
+.itam-employee-identity {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+
+.itam-employee-identity #employee-name {
+    margin-bottom: 8px !important;
+    font-size: clamp(1.35rem, 2.4vw, 1.8rem);
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.itam-employee-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin: 0;
+    color: var(--body-quiet-color);
+}
+
+.itam-employee-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.itam-employee-status::before {
+    width: 0.48rem;
+    height: 0.48rem;
+    border-radius: 50%;
+    background: currentColor;
+    content: "";
+}
+
+.itam-employee-status[data-status="ACTIVE"] {
+    background: light-dark(#dff3e4, #203d32);
+    color: light-dark(#21623a, #a9e6bc);
+}
+
+.itam-employee-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.itam-employee-actions > a,
+.itam-employee-menu summary {
+    padding: 9px 13px;
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.itam-employee-actions .itam-employee-secondary {
+    border-color: light-dark(#a66a4a, #d39877);
+    background: transparent;
+    color: var(--body-fg);
+}
+
+.itam-employee-menu {
+    position: relative;
+}
+
+.itam-employee-menu summary {
+    background: var(--body-bg);
+    color: var(--body-fg);
+    cursor: pointer;
+}
+
+.itam-employee-menu summary:focus-visible {
+    outline: 3px solid var(--link-fg);
+    outline-offset: 2px;
+}
+
+.itam-employee-menu ul {
+    position: absolute;
+    z-index: 2;
+    inset-inline-end: 0;
+    min-width: max-content;
+    margin: 5px 0 0;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--itam-surface);
+    box-shadow: 0 4px 14px #0002;
+}
+
+.itam-employee-menu li {
+    list-style: none;
+}
+
+.itam-employee-menu a {
+    display: block;
+    padding: 8px 10px;
+    border-radius: 5px;
+    color: var(--body-fg);
+}
+
+.itam-employee-menu a:hover,
+.itam-employee-actions .itam-employee-secondary:hover {
+    background: var(--selected-row);
+}
+
+.itam-employee-profile .itam-data {
+    grid-template-columns: minmax(88px, 1fr) minmax(0, 2fr);
+    gap: 12px 18px;
+}
+
+.itam-employee-profile .itam-data dd {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+    .itam-employee-menu ul {
+        position: static;
+    }
+}

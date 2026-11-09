@@ -1,0 +1,184 @@
+.itam-act-header,
+.itam-act-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.itam-act-header {
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.itam-act-card .itam-act-header h2 {
+    margin-bottom: 6px !important;
+}
+
+.itam-act-card .itam-data {
+    grid-template-columns: minmax(105px, 1fr) minmax(0, 2fr);
+}
+
+.itam-act-card dd {
+    overflow-wrap: anywhere;
+}
+
+.itam-act-secondary,
+.itam-act-menu summary {
+    padding: 9px 13px;
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+    font-size: 14px;
+}
+
+.itam-act-menu {
+    position: relative;
+}
+
+.itam-act-menu summary {
+    cursor: pointer;
+}
+
+.itam-act-menu ul {
+    position: absolute;
+    z-index: 2;
+    inset-inline-end: 0;
+    min-width: max-content;
+    margin: 5px 0 0;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--itam-surface);
+    box-shadow: 0 4px 14px #0002;
+}
+
+.itam-act-menu li {
+    list-style: none;
+}
+
+.itam-act-menu a {
+    display: block;
+    padding: 8px 10px;
+    border-radius: 5px;
+}
+
+.itam-act-menu a:hover,
+.itam-act-secondary:hover {
+    background: var(--selected-row);
+}
+
+.itam-act-versions {
+    margin-top: 20px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+#act-selector-dialog {
+    width: min(35rem, calc(100% - 2rem));
+    max-height: calc(100% - 2rem);
+    padding: 0;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--itam-surface);
+    color: var(--body-fg);
+    box-shadow: 0 16px 48px #101b284d;
+}
+
+#act-selector-dialog::backdrop {
+    background: #101b2899;
+}
+
+#act-selector-dialog:focus,
+#act-selector-title:focus {
+    outline: none;
+}
+
+.itam-act-selector-header,
+.itam-act-options,
+.itam-act-selector-footer {
+    padding-inline: clamp(16px, 5vw, 24px);
+}
+
+.itam-act-selector-header {
+    padding-block: 18px;
+    border-top: 4px solid var(--accent);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--darkened-bg);
+}
+
+#act-selector-title {
+    margin: 8px 0 4px;
+    color: var(--body-loud-color);
+    font-size: clamp(19px, 4vw, 23px);
+    line-height: 1.25;
+}
+
+.itam-act-selector-header p {
+    margin: 0;
+    color: var(--body-quiet-color);
+    font-size: 14px;
+}
+
+.itam-act-options {
+    display: grid;
+    gap: 10px;
+    padding-block: 16px;
+}
+
+#act-selector .itam-act-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--itam-surface);
+    color: var(--body-fg);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+#act-selector .itam-act-option:hover {
+    border-color: var(--accent);
+    background: var(--selected-row);
+}
+
+.itam-act-option-copy {
+    display: grid;
+    gap: 4px;
+}
+
+.itam-act-option-copy strong {
+    color: var(--body-loud-color);
+    font-size: 15px;
+}
+
+.itam-act-option-copy > span {
+    color: var(--body-quiet-color);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.itam-act-option-arrow {
+    color: var(--link-fg);
+    font-size: 20px;
+}
+
+.itam-act-selector-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-block: 12px;
+    border-top: 1px solid var(--border-color);
+    background: var(--darkened-bg);
+}
+
+@media (max-width: 600px) {
+    .itam-act-menu ul {
+        position: static;
+    }
+}

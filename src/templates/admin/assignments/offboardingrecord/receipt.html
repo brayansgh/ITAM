@@ -9,10 +9,10 @@
     <thead><tr><th>Activo recibido</th><th>Condición</th><th>Observaciones</th></tr></thead>
     <tbody>{% for item in items %}<tr><td>{{ item.assignment.asset }}</td><td>{{ item.condition }}</td><td>{{ item.observations|default:"—" }}</td></tr>{% endfor %}</tbody>
   </table></div>
-  <p>
+  <div class="itam-table-actions itam-receipt-actions">
     {% if record.pdf %}<a class="button" href="{% url 'admin:assignments_offboardingrecord_view_pdf' record.pk %}" target="_blank" rel="noopener"{% if open_pdf %} data-itam-return-pdf{% endif %}>Abrir acta PDF</a>{% endif %}
-    {% if can_manage_record %}<a class="button" href="{% url 'admin:assignments_offboardingrecord_change' record.pk %}">Ver acta y trámites de baja</a>{% endif %}
-    <a href="{% url 'admin:employees_employee_changelist' %}">Volver a Empleados</a>
-  </p>
+    {% if can_manage_record %}<a class="itam-table-action" href="{% url 'admin:assignments_offboardingrecord_change' record.pk %}">Ver acta y trámites de baja</a>{% endif %}
+    <a class="itam-table-action" href="{% url 'admin:employees_employee_changelist' %}">Volver a Empleados</a>
+  </div>
 </section>
 {% endblock %}

@@ -1,8 +1,4 @@
 {% extends "admin/change_form.html" %}
-{% block extrastyle %}
-{{ block.super }}
-<style>#items-group td.original p { display: none; }</style>
-{% endblock %}
 {% block content %}
 {% if return_decommission_entries %}
 <section class="itam-panel itam-detail-section">

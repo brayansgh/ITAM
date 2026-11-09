@@ -39,6 +39,32 @@ class ActiveReturnsTests(TestCase):
         return create_assignment(asset_id=asset.pk, employee_id=employee.pk, assigned_by=self.user,
                                  initial_condition="Buen estado")
 
+    def test_profile_groups_only_permitted_actions_and_keeps_edit_form(self):
+        profile_url = reverse("admin:employees_employee_change", args=[self.employee.pk])
+        history_url = reverse("admin:employees_employee_history", args=[self.employee.pk])
+        page = self.client.get(profile_url)
+        self.assertContains(page, '<h2 id="employee-name">Empleado de prueba</h2>', html=True)
+        self.assertContains(page, self.employee.full_name, count=1)
+        self.assertContains(page, "<summary>Acciones</summary>", html=True)
+        self.assertContains(page, f'<a href="{self.url}">Devolver activos</a>', html=True)
+        self.assertContains(page, f'<a href="{history_url}">Ver histórico</a>', count=1, html=True)
+        self.assertContains(page, "button itam-primary")
+        self.assertContains(page, "itam-employee-secondary")
+        edit_page = self.client.get(profile_url, {"editar": 1})
+        self.assertContains(edit_page, 'name="full_name"')
+        self.assertNotContains(edit_page, 'id="employee-name"')
+
+        reader = User.objects.create_user(username="employee_reader", is_staff=True, role=Role.CONSULTATION)
+        reader.user_permissions.add(Permission.objects.get(
+            content_type__app_label="employees", codename="view_employee",
+        ))
+        self.client.force_login(reader)
+        page = self.client.get(profile_url)
+        self.assertContains(page, "Solo consulta")
+        self.assertNotContains(page, "Asignar activo")
+        self.assertNotContains(page, "Editar empleado")
+        self.assertNotContains(page, "Devolver activos")
+
     def test_one_pdf_contains_all_selected_assets_and_keeps_employee_active(self):
         self.user = support_operator(self.user)
         self.client.force_login(self.user)

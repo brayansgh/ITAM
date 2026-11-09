@@ -4,7 +4,7 @@ from django import forms
 from django.forms.models import BaseInlineFormSet
 from django.core.exceptions import ValidationError
 from django.contrib import admin
-from django.contrib.admin.widgets import AdminFileWidget
+from django.contrib.admin.widgets import AdminFileWidget, RelatedFieldWidgetWrapper
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect
@@ -104,7 +104,8 @@ class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
     list_per_page = 25
     form = MaintenanceTicketForm
     change_form_template = 'admin/maintenance/ticket_form.html'
-    list_display = ('ticket_reference', 'asset', 'type', 'status', 'reported_by')
+    list_display = ('ticket_reference', 'asset', 'type', 'status', 'reporter_name')
+    autocomplete_fields = ('asset',)
     list_display_links = ('ticket_reference',)
     list_filter = ('type', 'status')
     search_fields = ('asset__legacy_asset_tag', 'asset__asset_tag', 'description', 'provider')
@@ -121,13 +122,34 @@ class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         route = getattr(getattr(request, "resolver_match", None), "url_name", "")
         return route == "maintenance_decommission_add" or request.GET.get("type") == MaintenanceType.DECOMMISSION
 
+    @staticmethod
+    def user_name(user):
+        return user.get_full_name() or user.get_username()
+
+    @admin.display(description="Reportado por", ordering="reported_by__first_name")
+    def reporter_name(self, obj):
+        return self.user_name(obj.reported_by)
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        if obj is not None and not self.has_change_permission(request, obj):
+            return (*fields, "reporter_name")
+        return fields
+
     def get_fieldsets(self, request, obj=None):
+        reporter = "reporter_name" if obj is not None and not self.has_change_permission(request, obj) else "reported_by"
         if self.is_decommission_form(request, obj):
             return (
-                ("Trámite de baja", {"fields": ("asset", "type", "decommission_reason", "description", "reported_by")}),
+                ("Trámite de baja", {"fields": ("asset", "type", "decommission_reason", "description", reporter)}),
                 ("Resolución de baja", {"fields": ("resolution_notes", "status")}),
             )
-        return super().get_fieldsets(request, obj)
+        if reporter == "reported_by":
+            return super().get_fieldsets(request, obj)
+        return tuple(
+            (title, {**options, "fields": tuple(reporter if field == "reported_by" else field
+                                               for field in options["fields"])})
+            for title, options in super().get_fieldsets(request, obj)
+        )
 
     def decommission_change_view(self, request, object_id):
         get_object_or_404(self.get_queryset(request), pk=object_id, type=MaintenanceType.DECOMMISSION)
@@ -208,7 +230,7 @@ class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
             form.instance.save()
 
     def get_queryset(self, request):
-        qs = super().get_queryset(request)
+        qs = super().get_queryset(request).select_related("reported_by")
         match = getattr(request, 'resolver_match', None)
         if match and match.url_name == 'maintenance_maintenancerecord_changelist':
             qs = qs.exclude(type=MaintenanceType.DECOMMISSION)
@@ -226,7 +248,7 @@ class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
             if not self.has_view_permission(request, obj):
                 return "Sin permiso"
             label = "Gestionar ticket" if self.has_change_permission(request, obj) else "Ver ticket"
-            return format_html('<a class="button" href="{}">{}</a>', reverse(
+            return format_html('<a class="itam-table-action" href="{}">{}</a>', reverse(
                 "admin:maintenance_maintenancerecord_change", args=[obj.pk],
             ), label)
 
@@ -234,6 +256,12 @@ class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
+        if "reported_by" in form.base_fields:
+            form.base_fields["reported_by"].label_from_instance = self.user_name
+        for name in ("asset", "reported_by"):
+            field = form.base_fields.get(name)
+            if field is not None and isinstance(field.widget, RelatedFieldWidgetWrapper):
+                field.widget = field.widget.widget
         if "status" in form.base_fields:
             form.base_fields["status"].help_text = (
                 "Al completar la baja, el trámite y sus anexos quedarán de solo consulta."

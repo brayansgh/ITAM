@@ -1,5 +1,9 @@
+from uuid import UUID
+
 from django import forms
-from .models import Asset, AssetGroup, Category
+from employees.models import Employee, EmployeeStatus
+
+from .models import Asset, AssetGroup, AssetStatus, Category
 
 
 class AssetRegistrationForm(forms.ModelForm):
@@ -23,14 +27,29 @@ class AssetRegistrationForm(forms.ModelForm):
             elif not existing:
                 categories = categories.none()
             self.fields['category'].queryset = categories
+        if not existing and 'brand' in self.fields and 'model' in self.fields:
+            models = self.fields['model'].queryset
+            brand = self.data.get(self.add_prefix('brand')) if self.is_bound else self.initial.get('brand')
+            try:
+                brand_id = UUID(str(brand))
+            except ValueError:
+                models = models.none()
+            else:
+                models = models.filter(brand_id=brand_id).order_by('name', 'pk')
+            self.fields['model'].queryset = models
+            self.fields['model'].help_text = 'Selecciona una marca para ver sus modelos.'
         if 'owner_company' in self.fields:
             self.fields['owner_company'].required = True
             self.fields['owner_company'].queryset = self.fields['owner_company'].queryset.filter(code__in=('ACE', 'SOL'))
         if 'status' in self.fields:
             forbidden = {'DECOMMISSIONED'}
-            if not existing:
+            supports_assignment = 'assignment_employee' in self.fields
+            if (not existing or self.instance.status == AssetStatus.AVAILABLE) and not supports_assignment:
                 forbidden.add('ASSIGNED')
-            self.fields['status'].choices = [(key, label) for key, label in self.fields['status'].choices if key not in forbidden]
+            self.fields['status'].choices = [
+                (key, 'Asignar a una persona' if supports_assignment and key == AssetStatus.ASSIGNED else label)
+                for key, label in self.fields['status'].choices if key not in forbidden
+            ]
 
     def clean(self):
         data = super().clean()
@@ -40,4 +59,26 @@ class AssetRegistrationForm(forms.ModelForm):
             self.add_error('category', 'El tipo de activo no pertenece al grupo elegido.')
         if category and not category.group and self.instance._state.adding:
             self.add_error('category', 'Selecciona un tipo de activo clasificado por grupo.')
+        return data
+
+
+class AssetWithAssignmentForm(AssetRegistrationForm):
+    assignment_employee = forms.ModelChoiceField(
+        queryset=Employee.objects.exclude(status=EmployeeStatus.RETIRO).order_by('full_name'),
+        label='Empleado responsable',
+        required=False,
+    )
+    assignment_condition = forms.CharField(
+        label='Condición de entrega', widget=forms.Textarea(attrs={'rows': 3}), required=False,
+    )
+
+    def clean(self):
+        data = super().clean()
+        self.assign_on_save = data.get('status') == AssetStatus.ASSIGNED
+        if self.assign_on_save:
+            # El servicio registra la custodia antes de pasar el activo a ASSIGNED.
+            data['status'] = AssetStatus.AVAILABLE
+            for name in ('assignment_employee', 'assignment_condition'):
+                if not data.get(name) and name not in self.errors:
+                    self.add_error(name, 'Este campo es obligatorio al asignar el activo.')
         return data

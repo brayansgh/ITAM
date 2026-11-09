@@ -24,8 +24,6 @@ def resolved_status(asset, using):
 
 
 def validate_asset_status(asset, using):
-    if not asset.pk:
-        return
     if asset.status == AssetStatus.DECOMMISSIONED and not MaintenanceRecord.objects.using(using).filter(
         asset_id=asset.pk, type=MaintenanceType.DECOMMISSION, status=MaintenanceStatus.COMPLETED,
     ).exists():
@@ -34,7 +32,9 @@ def validate_asset_status(asset, using):
     # No bloquear cambios de ubicación/metadatos por un estado heredado sin cambios.
     if previous_status == asset.status:
         return
-    active = asset.assignments.using(using).filter(status="ACTIVE").exists()
+    active = asset.pk is not None and asset.assignments.using(using).filter(status="ACTIVE").exists()
+    if asset.status == AssetStatus.ASSIGNED and not active:
+        raise ValidationError({"status": "Registra una asignación vigente antes de marcar el activo como asignado."})
     if asset.status in (AssetStatus.AVAILABLE, AssetStatus.DECOMMISSIONED) and active:
         raise ValidationError({"status": "Registra primero la devolución de los activos en custodia."})
     if asset.status in (AssetStatus.AVAILABLE, AssetStatus.ASSIGNED) and open_repairs(asset, using).exists():

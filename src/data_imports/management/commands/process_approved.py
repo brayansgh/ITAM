@@ -2,7 +2,6 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from data_imports.models import StagingAsset, ImportStatus
 from organizations.models import Company, Site, Area
-from employees.models import Employee
 from inventory.models import Category, Brand, ModelAsset, Asset, AssetSpecs, AssetNetwork
 
 class Command(BaseCommand):
@@ -31,6 +30,11 @@ class Command(BaseCommand):
         
         for stg in approved:
             try:
+                if stg.employee_name:
+                    raise CommandError(
+                        'La fila incluye un custodio y no tiene condición de entrega. '
+                        'Registra la custodia mediante el flujo de asignación.'
+                    )
                 with transaction.atomic():
                     # 1. Crear o recuperar Organizaciones
                     comp_name = stg.company or 'Desconocida'
@@ -39,33 +43,16 @@ class Command(BaseCommand):
                     site, _ = Site.objects.get_or_create(name=stg.site or 'Principal', company=comp)
                     
                     # CORRECCIÓN: El Área está vinculada a la Compañía, no a la Sede
-                    area, _ = Area.objects.get_or_create(name=stg.area or 'General', company=comp)
+                    Area.objects.get_or_create(name=stg.area or 'General', company=comp)
                     
-                    # 2. Manejo inteligente de Empleados
-                    if stg.employee_name:
-                        if stg.employee_document:
-                            emp = Employee.objects.filter(document_number=stg.employee_document).first()
-                            if not emp:
-                                Employee.objects.create(
-                                    full_name=stg.employee_name, document_number=stg.employee_document,
-                                    company=comp, site=site, area=area
-                                )
-                        else:
-                            Employee.objects.get_or_create(
-                                full_name=stg.employee_name, company=comp,
-                                defaults={'site': site, 'area': area}
-                            )
-                    
-                    # 3. Clasificación del Inventario
+                    # 2. Clasificación del Inventario
                     cat = Category.objects.exclude(group='').filter(name__iexact=stg.element or '').first()
                     if cat is None:
                         raise CommandError('El elemento del lote debe coincidir con un tipo de activo clasificado. Revisa el catálogo antes de importar.')
                     brand, _ = Brand.objects.get_or_create(name=stg.brand or 'Genérica')
                     model_obj, _ = ModelAsset.objects.get_or_create(name=stg.model or 'Genérico', brand=None, category=None)
                     
-                    # 4. Generación del Código Interno
-                    
-                    # 5. Creación del Activo Físico
+                    # 3. Creación del activo y generación de su código interno
                     asset = Asset.objects.create(
                         owner_company=owner,
                         legacy_asset_tag=stg.legacy_asset_tag,
@@ -75,11 +62,10 @@ class Command(BaseCommand):
                         brand=brand,
                         company=comp,
                         site=site,
-                        status='ASSIGNED' if stg.employee_name else 'AVAILABLE',
                         observations=stg.observations
                     )
                     
-                    # 6. Especificaciones técnicas y de red
+                    # 4. Especificaciones técnicas y de red
                     AssetSpecs.objects.create(
                         asset=asset, ram=stg.ram, storage=stg.storage, 
                         processor=stg.processor, operating_system=stg.operating_system
@@ -90,7 +76,7 @@ class Command(BaseCommand):
                             asset=asset, hostname=stg.hostname, mac_address=stg.mac_address
                         )
                         
-                    # 7. Actualizar el estado en Staging
+                    # 5. Actualizar el estado en Staging
                     stg.status = ImportStatus.IMPORTED
                     stg.save()
                     success_count += 1

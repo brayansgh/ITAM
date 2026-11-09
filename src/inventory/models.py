@@ -39,7 +39,11 @@ class ModelAsset(BaseModel):
     history = HistoricalRecords()
     brand = models.ForeignKey(Brand, verbose_name='Marca', on_delete=models.PROTECT, related_name='models', null=True, blank=True)
     category = models.ForeignKey(Category, verbose_name='Tipo de activo', on_delete=models.PROTECT, related_name='models', null=True, blank=True)
-    name = models.CharField(max_length=100)
+    name = models.CharField("Nombre", max_length=100)
+
+    class Meta:
+        verbose_name = "modelo"
+        verbose_name_plural = "modelos"
 
     def __str__(self):
         return self.name

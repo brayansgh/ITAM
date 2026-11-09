@@ -37,14 +37,14 @@ class MaintenanceRecord(BaseModel):
         "Motivo de baja", max_length=20, choices=DecommissionReason.choices, blank=True,
     )
     description = models.TextField(verbose_name="Descripción del Problema o Motivo")
-    reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="Reportado/Gestionado por")
+    reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="Reportado por")
     provider = models.CharField(max_length=150, blank=True, null=True, verbose_name="Proveedor o Técnico Externo")
     cost = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Costo Total (COP)")
     resolution_notes = models.TextField(blank=True, null=True, verbose_name="Notas de Resolución o Diagnóstico")
 
     class Meta:
-        verbose_name = "Mantenimiento / Baja"
-        verbose_name_plural = "Mantenimientos y Bajas"
+        verbose_name = "mantenimiento"
+        verbose_name_plural = "mantenimientos"
         ordering = ['-created_at']
 
     def clean(self):

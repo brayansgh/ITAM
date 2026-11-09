@@ -1,10 +1,9 @@
 {% extends "admin/base_site.html" %}
 
+{% block bodyclass %}{{ block.super }} itam-change-form itam-offboarding{% endblock %}
 {% block content %}
 
-<h1>{{ title }}</h1>
-
-<p>
+<p class="itam-notice">
     Selecciona únicamente los activos que estás recibiendo físicamente.
     Los que no selecciones permanecerán asignados al empleado.
 </p>
@@ -18,7 +17,7 @@
         {{ formset.management_form }}
 
         {% for row in rows %}
-            <div style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px;">
+            <section class="itam-panel itam-offboarding-item">
 
                 <h3>
                     {{ row.assignment.asset.asset_tag }}
@@ -42,21 +41,21 @@
 
                 {{ row.form.assignment_id }}
 
-                <p>{{ row.form.selected }} {{ row.form.selected.label }}</p>
+                <p><label>{{ row.form.selected }} {{ row.form.selected.label }}</label></p>
 
                 <p>
-                    {{ row.form.condition.label }}
+                    {{ row.form.condition.label_tag }}
                     {{ row.form.condition }}
                     {{ row.form.condition.errors }}
                 </p>
 
                 <p>
-                    {{ row.form.observations.label }}
+                    {{ row.form.observations.label_tag }}
                     {{ row.form.observations }}
                     {{ row.form.observations.errors }}
                 </p>
 
-            </div>
+            </section>
         {% empty %}
             <p>Este empleado no tiene activos pendientes de devolución.</p>
         {% endfor %}
@@ -64,17 +63,14 @@
 
     <fieldset class="module aligned">
         <h2>Observaciones generales del acta</h2>
-        {{ form.observations }}
-        {{ form.observations.errors }}
+        <div class="form-row">{{ form.observations.label_tag }} {{ form.observations }} {{ form.observations.errors }}</div>
     </fieldset>
 
-    <div style="margin-top: 20px;">
-        <button type="submit" class="default">
-            Registrar devolución
-        </button>
+    <div class="submit-row">
+        <input type="submit" class="default" value="Registrar devolución">
 
         <a href="{% url 'admin:employees_employee_changelist' %}"
-           class="button">
+           class="closelink">
             Cancelar
         </a>
     </div>

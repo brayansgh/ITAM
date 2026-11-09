@@ -55,17 +55,14 @@ class ReturnAssignmentTests(TestCase):
             asset_tag="TEST-PC-001",
             category=self.category,
             company=self.company,
-            status=AssetStatus.ASSIGNED,
         )
 
         # Asignación vigente.
-        self.assignment = Assignment.objects.create(
-            asset=self.asset,
-            employee=self.employee,
-            assigned_by=self.user,
-            initial_condition="Equipo en buen estado.",
-            status=AssignmentStatus.ACTIVE,
+        self.assignment = create_assignment(
+            asset_id=self.asset.pk, employee_id=self.employee.pk,
+            assigned_by=self.user, initial_condition="Equipo en buen estado.",
         )
+        self.asset.refresh_from_db()
 
     def test_return_assignment_successfully(self):
         """
@@ -422,7 +419,6 @@ class AssignmentPDFTestData:
             asset_tag="PDF-PC-001",
             category=self.category,
             company=self.company,
-            status=AssetStatus.ASSIGNED,
         )
 
         self.technician = User.objects.create_user(
@@ -432,13 +428,11 @@ class AssignmentPDFTestData:
             is_staff=True,
         )
 
-        self.assignment = Assignment.objects.create(
-            asset=self.asset,
-            employee=self.employee,
-            assigned_by=self.technician,
-            initial_condition="Equipo en buen estado",
-            status=AssignmentStatus.ACTIVE,
+        self.assignment = create_assignment(
+            asset_id=self.asset.pk, employee_id=self.employee.pk,
+            assigned_by=self.technician, initial_condition="Equipo en buen estado",
         )
+        self.asset.refresh_from_db()
 
         self.url = reverse(
             "download_act_pdf",
@@ -508,6 +502,124 @@ class AssignmentPDFDownloadTests(
             "acta_prueba.pdf",
             ContentFile(b"%PDF-1.4\n% PDF de prueba\n"),
         )
+    def test_returned_assignment_offers_return_pdf_and_keeps_previous_delivery(self):
+        from assignments import utils
+
+        previous = self.assignment.history.first()
+        self.client.force_login(self.technician)
+        act_url = reverse("admin:assignments_assignment_act", args=[self.assignment.pk])
+        before = self.client.get(act_url)
+        self.assertContains(before, "Generar nueva versión")
+        self.assertEqual(self.assignment.history.first().signed_act_pdf, previous.signed_act_pdf)
+
+        with patch.object(utils, "render_to_string", wraps=utils.render_to_string) as rendered:
+            response = self.client.post(act_url, {"mode": "delivery"})
+        self.assertRedirects(response, act_url)
+        self.assertEqual([item.pk for item in rendered.call_args.args[1]["assignments"]], [self.assignment.pk])
+        self.assertEqual(rendered.call_args.args[1]["employee"], self.employee)
+        self.assignment.refresh_from_db()
+        version = self.assignment.history.first()
+        self.assertNotEqual(version.signed_act_pdf, previous.signed_act_pdf)
+        self.assertEqual(version.history_user, self.technician)
+        self.assertEqual(version.history_change_reason, "Generación de acta de entrega")
+        from django.contrib.auth.models import Permission
+
+        self.technician.user_permissions.add(Permission.objects.get(
+            content_type__app_label="assignments", codename="view_offboardingrecord",
+        ))
+        from assignments.models import ReturnReason
+        from assignments.services import register_active_returns
+        from assignments.utils import AssignmentActError, issue_assignment_act
+
+        record, _ = register_active_returns(
+            employee=self.employee, assignments=[self.assignment], reason=ReturnReason.DAMAGE,
+            condition="Recibido", observations="", actor=self.technician,
+        )
+        self.assertTrue(record.pdf)
+        return_pdf = reverse("admin:assignments_offboardingrecord_view_pdf", args=[record.pk])
+        self.assertEqual(record.items.get().assignment_id, self.assignment.pk)
+        page = self.client.get(act_url + "?confirmada=1")
+        self.assertContains(page, return_pdf)
+        self.assertNotContains(page, "Generar nueva versión")
+        self.assertEqual(self.client.post(act_url, {"mode": "delivery"}).status_code, 403)
+        with self.assertRaisesMessage(AssignmentActError, "La asignación ya no está vigente"):
+            issue_assignment_act(self.assignment.pk, actor=self.technician)
+        history = self.client.get(reverse("admin:assignments_assignment_changelist"))
+        self.assertContains(history, return_pdf)
+        self.assertContains(history, "Acta de devolución")
+
+        second_employee = Employee.objects.create(company=self.company, full_name="Segundo custodio")
+        new_assignment = create_assignment(
+            asset_id=self.asset.pk, employee_id=second_employee.pk, assigned_by=self.technician,
+            initial_condition="Operativo",
+        )
+        self.assertEqual(Assignment.objects.count(), 2)
+        self.assertContains(self.client.get(act_url), "Versiones anteriores")
+        self.assertContains(self.client.get(reverse("admin:assignments_assignment_changelist")), act_url)
+
+        reader = self.create_user(Role.CONSULTATION)
+        self.client.force_login(reader)
+        self.assertEqual(self.client.post(act_url, {"mode": "delivery"}).status_code, 403)
+        self.assertNotContains(self.client.get(act_url), "Generar nueva versión")
+        wrong = reverse("download_act_pdf", args=[new_assignment.pk])
+        self.assertEqual(self.client.get(wrong, {"version": previous.history_id}).status_code, 404)
+        download = self.client.get(self.url, {"version": previous.history_id, "descargar": "1"})
+        try:
+            self.assertEqual(download.status_code, 200)
+            self.assertTrue(download["Content-Disposition"].startswith("attachment;"))
+            self.assertEqual(b"".join(download.streaming_content), b"%PDF-1.4\n% PDF de prueba\n")
+        finally:
+            download.close()
+
+    def test_pdf_action_menu_offers_both_modalities_and_keeps_previous_file(self):
+        from assignments import utils
+
+        def assign(code):
+            asset = Asset.objects.create(asset_tag=code, category=self.category, company=self.company)
+            return create_assignment(asset_id=asset.pk, employee_id=self.employee.pk,
+                                     assigned_by=self.technician, initial_condition="Operativo")
+
+        additional = assign("CONSOL-01")
+        returned = assign("CONSOL-02")
+        retired = assign("CONSOL-03")
+        return_assignment(assignment_id=returned.pk, condition="Recibido")
+        Asset.objects.filter(pk=retired.asset_id).update(status=AssetStatus.DECOMMISSIONED)
+
+        self.client.force_login(self.technician)
+        act_url = reverse("admin:assignments_assignment_act", args=[self.assignment.pk])
+        page = self.client.get(act_url + "?confirmada=1")
+        for label in ("Acciones del PDF", "Abrir PDF", "Descargar PDF", "Generar nueva versión",
+                      "Acta de entrega de esta asignación", "Acta consolidada del empleado", "Posponer"):
+            self.assertContains(page, label)
+        self.assertEqual(self.client.post(act_url, {"mode": "inválida"}).status_code, 400)
+        original = self.assignment.signed_act_pdf.name
+        previous = self.assignment.history.first().history_id
+        count = Assignment.objects.count()
+        with patch.object(utils, "render_to_string", wraps=utils.render_to_string) as rendered:
+            response = self.client.post(act_url, {"mode": "consolidated"})
+        self.assertRedirects(response, act_url)
+        context = rendered.call_args.args[1]
+        self.assertTrue(context["consolidated"])
+        self.assertEqual({item.pk for item in context["assignments"]}, {self.assignment.pk, additional.pk})
+        self.assignment.refresh_from_db()
+        self.assertNotEqual(self.assignment.signed_act_pdf.name, original)
+        self.assertTrue(self.assignment.signed_act_pdf.storage.exists(original))
+        self.assertEqual(Assignment.objects.count(), count)
+        self.assertContains(self.client.get(act_url), f"?version={previous}&amp;descargar=1")
+
+    def test_generation_failure_preserves_assignment_and_existing_document(self):
+        self.client.force_login(self.technician)
+        act_url = reverse("admin:assignments_assignment_act", args=[self.assignment.pk])
+        original = self.assignment.signed_act_pdf.name
+        versions = self.assignment.history.count()
+        with patch("assignments.utils.generate_act_pdf", side_effect=OSError):
+            response = self.client.post(act_url, {"mode": "delivery"}, follow=True)
+        self.assertContains(response, "La asignación sigue registrada.")
+        self.assignment.refresh_from_db()
+        self.assertEqual(self.assignment.signed_act_pdf.name, original)
+        self.assertEqual(self.assignment.history.count(), versions)
+        self.assertEqual(Assignment.objects.count(), 1)
+
     def test_technology_user_can_download_pdf(self):
         self.client.force_login(self.technician)
 

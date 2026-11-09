@@ -1,0 +1,96 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {% if can_generate %}<script src="{% static 'itam/act-selector.js' %}?v=2" defer></script>{% endif %}
+{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'itam/act-selector.css' %}?v=3">
+{% endblock %}
+
+{% block content %}
+{% url 'admin:assignments_assignment_change' assignment.pk as assignment_url %}
+{% url 'download_act_pdf' assignment.pk as pdf_url %}
+<section class="itam-panel itam-act-card" aria-labelledby="assignment-confirmed">
+    <header class="itam-act-header">
+        <div>
+            <h2 id="assignment-confirmed">Asignación registrada</h2>
+            <span class="itam-label">{% if assignment.signed_act_pdf %}PDF disponible{% elif can_generate %}Acta pendiente{% else %}Acta de entrega no disponible{% endif %}</span>
+        </div>
+        <div class="itam-act-actions">
+            {% if return_pdf_url %}<a class="button itam-primary" href="{{ return_pdf_url }}" target="_blank" rel="noopener">Acta de devolución</a>{% endif %}
+            {% if assignment.signed_act_pdf %}
+                <details id="act-pdf-actions" class="itam-act-menu">
+                    <summary class="button itam-primary">Acciones del PDF</summary>
+                    <ul>
+                        <li><a href="{{ pdf_url }}" target="_blank" rel="noopener">Abrir PDF</a></li>
+                        <li><a href="{{ pdf_url }}?descargar=1">Descargar PDF</a></li>
+                        {% if can_generate %}<li><a href="#act-selector" data-open-act-selector>Generar nueva versión</a></li>{% endif %}
+                    </ul>
+                </details>
+            {% elif can_generate %}
+                <a class="button itam-primary" href="#act-selector" data-open-act-selector>Generar acta PDF</a>
+            {% endif %}
+            <a class="itam-act-secondary" href="{{ assignment_url }}">Ir a la asignación</a>
+        </div>
+    </header>
+    <dl class="itam-data">
+        <dt>Activos de la entrega</dt>
+        <dd>{% for asset in delivery_assets %}{{ asset }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd>
+        <dt>Empleado responsable</dt><dd>{{ assignment.employee }}</dd>
+        <dt>Fecha de entrega</dt><dd>{{ assignment.assigned_at|date:"d/m/Y H:i T" }}</dd>
+        <dt>Estado de la asignación</dt><dd>{{ assignment.get_status_display }}</dd>
+    </dl>
+    {% if can_generate %}
+        <dialog id="act-selector-dialog" aria-labelledby="act-selector-title" aria-describedby="act-selector-help"
+                {% if show_selector %}data-open-on-load{% endif %}></dialog>
+        <div id="act-selector">
+            <header class="itam-act-selector-header">
+                <span class="itam-label">Actas de asignación</span>
+                <h3 id="act-selector-title" tabindex="-1" autofocus>¿Qué acta deseas generar?</h3>
+                <p id="act-selector-help">Elige qué activos incluir en el PDF.</p>
+            </header>
+            <form method="post">
+                {% csrf_token %}
+                <div class="itam-act-options">
+                    <button class="itam-act-option" type="submit" name="mode" value="delivery"
+                            aria-labelledby="act-delivery-title" aria-describedby="act-delivery-help">
+                        <span class="itam-act-option-copy">
+                            <strong id="act-delivery-title">Acta de entrega de esta asignación</strong>
+                            <span id="act-delivery-help">Incluye los activos entregados en esta operación.</span>
+                        </span>
+                        <span class="itam-act-option-arrow" aria-hidden="true">→</span>
+                    </button>
+                    <button class="itam-act-option" type="submit" name="mode" value="consolidated"
+                            aria-labelledby="act-consolidated-title" aria-describedby="act-consolidated-help">
+                        <span class="itam-act-option-copy">
+                            <strong id="act-consolidated-title">Acta consolidada del empleado</strong>
+                            <span id="act-consolidated-help">Incluye todos los activos que el empleado tiene bajo custodia vigente.</span>
+                        </span>
+                        <span class="itam-act-option-arrow" aria-hidden="true">→</span>
+                    </button>
+                </div>
+                <footer class="itam-act-selector-footer">
+                    <a id="dismiss-act-selector" class="itam-act-secondary" href="{{ assignment_url }}">Posponer</a>
+                </footer>
+            </form>
+        </div>
+    {% endif %}
+    {% if previous_acts %}
+        <section class="itam-act-versions">
+            <h3>Versiones anteriores</h3>
+            <ul>
+                {% for version in previous_acts %}
+                    <li><a href="{{ pdf_url }}?version={{ version.history_id }}&amp;descargar=1">
+                        Descargar {% if version.history_change_reason == "Generación de acta de custodia vigente" %}acta consolidada{% elif version.history_change_reason == "Generación de acta de entrega" %}acta de entrega{% else %}acta{% endif %}
+                        registrada el {{ version.history_date|date:"d/m/Y H:i:s T" }}
+                    </a></li>
+                {% endfor %}
+            </ul>
+        </section>
+    {% endif %}
+</section>
+{% endblock %}

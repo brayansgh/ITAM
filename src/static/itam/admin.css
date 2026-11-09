@@ -79,8 +79,8 @@ a.button:hover,a.button:focus,input[type=submit]:hover,input[type=button]:hover,
 /* Barra global: altura adaptable para no recortar los enlaces con border-box. */
 #content .submit-row{align-items:center;overflow:visible;gap:12px}
 #content .submit-row input[type=submit],#content .submit-row a.closelink,#content .submit-row a.deletelink{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:auto;min-height:44px;max-width:100%;padding:10px 16px;margin:0;border:1px solid transparent;border-radius:6px;font:inherit;line-height:1.4;text-align:center;white-space:normal;text-decoration:none}
-#content .submit-row a.closelink{background:var(--itam-action-bg);color:var(--itam-action-ink)}
-#content .submit-row a.closelink:hover,#content .submit-row a.closelink:focus{background:var(--itam-action-hover-bg);color:var(--itam-action-ink)}
+#content .submit-row a.closelink{background:var(--itam-surface);color:var(--link-fg);border-color:var(--border-color)}
+#content .submit-row a.closelink:hover,#content .submit-row a.closelink:focus-visible{background:var(--selected-row);color:var(--link-fg);border-color:var(--accent)}
 #content .submit-row .deletelink-box{display:flex;margin:0 0 0 auto;padding:0}
 #content .submit-row a.deletelink,.delete-confirmation form input[type=submit]{background:var(--delete-button-bg);color:#fff;border-color:var(--delete-button-bg)}
 #content .submit-row a.deletelink:hover,#content .submit-row a.deletelink:focus,.delete-confirmation form input[type=submit]:hover{background:var(--delete-button-hover-bg);color:#fff}
@@ -421,11 +421,50 @@ a.button:hover,a.button:focus,input[type=submit]:hover,input[type=button]:hover,
   overflow-wrap: anywhere;
 }
 
+.itam-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+a.itam-table-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--darkened-bg);
+  color: var(--link-fg);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+a.itam-table-action::after {
+  width: 5px;
+  height: 5px;
+  border-block-start: 1.5px solid currentColor;
+  border-inline-end: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  content: "";
+}
+
+a.itam-table-action:hover,
+a.itam-table-action:focus-visible {
+  border-color: var(--accent);
+  background: var(--selected-row);
+  color: var(--link-fg);
+}
+
 .itam-brand-assets {
   display: grid;
-  grid-template-columns: 5ch repeat(2, 8.5rem);
+  grid-template-columns: minmax(4ch, auto) repeat(2, auto);
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: max-content;
 }
 
@@ -433,14 +472,11 @@ a.button:hover,a.button:focus,input[type=submit]:hover,input[type=button]:hover,
   grid-column: 1;
   grid-row: 1;
   color: var(--link-fg);
+  font-variant-numeric: tabular-nums;
 }
 
-.itam-brand-assets a.button {
+.itam-brand-assets .itam-table-action {
   grid-row: 1;
-  min-height: 30px;
-  padding: 4px 6px;
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 .itam-brand-active_assets {
@@ -786,4 +822,137 @@ body.login.itam-auth { padding: 0; }
 @media (max-width: 767px) {
   .itam-account-name { max-width: min(56vw, 220px); }
   .itam-account-panel { inset-inline: 0 auto; }
+}
+
+/* Controles y tablas compartidos por las vistas administrativas. */
+.itam-change-form #content fieldset.module.aligned[hidden] {
+  display: none;
+}
+
+#content .itam-filter-row :is(input:not([type=hidden]):not([type=submit]), select) {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--itam-surface);
+  color: var(--body-fg);
+  font: inherit;
+  font-size: 14px;
+}
+
+#content .itam-filter-row button[type=submit] {
+  min-height: 38px;
+  padding: 7px 14px;
+  border: 1px solid var(--itam-action-bg);
+  border-radius: 7px;
+  background: var(--itam-action-bg);
+  color: var(--itam-action-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#content .itam-filter-row button[type=submit]:hover {
+  background: var(--itam-action-hover-bg);
+}
+
+body .select2-container--admin-autocomplete :is(.select2-selection, .select2-dropdown, .select2-search__field) {
+  background: var(--itam-surface);
+  border-color: var(--border-color);
+  color: var(--body-fg);
+}
+
+body .select2-container--admin-autocomplete :is(.select2-selection__rendered, .select2-selection__choice) {
+  color: var(--body-fg);
+}
+
+body .select2-container--admin-autocomplete :is(.select2-selection__choice, .select2-results__option[aria-selected=true]) {
+  background: var(--darkened-bg);
+  border-color: var(--border-color);
+}
+
+body .select2-container--admin-autocomplete .select2-results__option--highlighted[aria-selected] {
+  background: var(--selected-row);
+  color: var(--link-fg);
+}
+
+.itam-table-wrap th {
+  font-weight: 600;
+  text-align: start;
+}
+
+.itam-table-wrap td {
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.itam-status-success {
+  background: var(--message-success-bg);
+  color: light-dark(#21623a, #a9e6bc);
+}
+
+.itam-receipt-actions {
+  align-items: center;
+  margin-top: 16px;
+}
+
+.itam-offboarding-item,
+.itam-offboarding #content fieldset > .form-row {
+  grid-column: 1 / -1;
+}
+
+.itam-offboarding-item {
+  margin: 12px 16px;
+}
+
+.itam-offboarding-item h3 {
+  margin-top: 0;
+  color: var(--link-fg);
+}
+
+.itam-offboarding #content .itam-offboarding-item label:has(input[type=checkbox]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.itam-change-form #items-group td.original p {
+  display: none;
+}
+
+.itam-change-form #content .aligned .form-row:has(#id_assignments) {
+  grid-column: 1 / -1;
+}
+
+.itam-change-form #content #id_assignments label {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  padding-block: 5px;
+}
+
+.itam-change-form #content input:is([type=checkbox], [type=radio]) {
+  accent-color: var(--accent);
+}
+
+#header .itam-global-search input::placeholder {
+  color: var(--body-quiet-color);
+  opacity: 1;
+}
+
+@media (max-width: 767px) {
+  #container #header #branding {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  #header > .itam-theme-switch {
+    align-self: center;
+  }
+}
+
+.app-maintenance.model-maintenancerecord.itam-change-form #id_asset + .select2-container {
+  width: 100% !important;
+  max-width: 100%;
 }

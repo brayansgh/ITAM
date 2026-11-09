@@ -28,7 +28,7 @@
     <table class="header-table">
         <tr>
             <td class="text-center" width="25%"><img src="{{ logo_acepalma }}" alt="Acepalma"></td>
-            <th class="text-center" width="50%">CONTROL Y ENTREGA DE ACTIVOS TECNOLÓGICOS</th>
+            <th class="text-center" width="50%">CONTROL Y ENTREGA DE ACTIVOS TECNOLÓGICOS<br>{% if consolidated %}ACTA CONSOLIDADA{% else %}ACTA DE ENTREGA{% endif %}</th>
             <td class="text-center" width="25%">
                 <img src="{{ logo_solutrans }}" alt="Solutrans"><br>
                 <span style="font-size:8px;">GI-FR-05<br>Versión 001</span>
@@ -71,9 +71,15 @@
 
     <table>
         <tr>
-            <td width="20%" class="bg-gray bold text-center">FECHA DE ENTREGA</td>
+            <td width="20%" class="bg-gray bold text-center">{% if consolidated %}FECHA DE CORTE{% else %}FECHA DE ENTREGA{% endif %}</td>
             <td width="80%">{{ date|upper }}</td>
         </tr>
+        {% if initial_condition %}
+        <tr>
+            <td class="bg-gray bold text-center">CONDICIÓN DE ENTREGA</td>
+            <td>{{ initial_condition }}</td>
+        </tr>
+        {% endif %}
         <tr>
             <td class="bg-gray bold text-center">OBSERVACIONES</td>
             <td>{{ observations|default:"ENTREGA DE ELEMENTOS TECNOLÓGICOS"|upper }}</td>

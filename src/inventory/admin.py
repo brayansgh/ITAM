@@ -1,12 +1,17 @@
+from uuid import UUID
+
 from core.admin_audit import StandardHistoryAdmin
 from django.contrib import admin
+from django.contrib.admin.options import IS_POPUP_VAR
+from django.core.exceptions import ValidationError
 from django.db.models import Count, OuterRef, Subquery
 from django.db.models.functions import Coalesce
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.http import urlencode
-from .models import Category, Brand, ModelAsset, Asset, AssetSpecs, AssetNetwork, AssetWarranty, DecommissionedAsset
-from .forms import AssetRegistrationForm
+from .models import Category, Brand, ModelAsset, Asset, AssetStatus, AssetSpecs, AssetNetwork, AssetWarranty, DecommissionedAsset
+from .forms import AssetRegistrationForm, AssetWithAssignmentForm
 from django.forms import modelform_factory
 
 @admin.register(Category)
@@ -48,15 +53,41 @@ class BrandAdmin(StandardHistoryAdmin):
         if not links:
             return 'Sin permiso para consultar activos'
         actions = format_html_join(
-            '', '<a href="{}" class="button itam-brand-{}">{} ({})</a>', links,
+            '', '<a href="{}" class="itam-table-action itam-brand-{}">{} ({})</a>', links,
         )
         return format_html('<div class="itam-brand-assets"><strong>{}</strong>{}</div>', total, actions)
 
 @admin.register(ModelAsset)
 class ModelAssetAdmin(StandardHistoryAdmin):
-    list_display = ('name', 'created_at')
-    fields = ('name',)
-    search_fields = ('name',)
+    list_display = ('name', 'brand', 'created_at')
+    fields = ('name', 'brand')
+    search_fields = ('name', 'brand__name')
+
+    def popup_brand(self, request):
+        if '_popup' not in request.GET:
+            return None
+        try:
+            brand_id = UUID(request.GET.get('brand', ''))
+        except ValueError:
+            return None
+        return Brand.objects.filter(pk=brand_id).values_list('pk', flat=True).first()
+
+    def has_add_permission(self, request):
+        if super().has_add_permission(request):
+            return True
+        asset_admin = self.admin_site.get_model_admin(Asset)
+        return asset_admin.has_add_permission(request) and self.popup_brand(request) is not None
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        brand_id = self.popup_brand(request) if obj is None else None
+        if brand_id:
+            brand = form.base_fields['brand']
+            brand.queryset = brand.queryset.filter(pk=brand_id)
+            brand.initial = brand_id
+            brand.disabled = True
+        return form
+
 
 class FrozenAssetInlineMixin:
     def has_add_permission(self, request, obj=None):
@@ -125,6 +156,19 @@ class AssetAdmin(StandardHistoryAdmin):
             "category", "brand", "model", "company", "owner_company", "site",
         ).annotate(current_employee_name=Subquery(active.values("employee__full_name")[:1]))
 
+    def get_search_results(self, request, queryset, search_term):
+        if (getattr(getattr(request, 'resolver_match', None), 'url_name', None) == 'autocomplete'
+                and request.GET.get('app_label') == 'assignments'
+                and request.GET.get('model_name') == 'assignment'
+                and request.GET.get('field_name') == 'asset'):
+            queryset = queryset.filter(status=AssetStatus.AVAILABLE).order_by('asset_tag', 'pk')
+        if (getattr(getattr(request, 'resolver_match', None), 'url_name', None) == 'autocomplete'
+                and request.GET.get('app_label') == 'maintenance'
+                and request.GET.get('model_name') == 'maintenancerecord'
+                and request.GET.get('field_name') == 'asset'):
+            queryset = queryset.order_by('asset_tag', 'pk')
+        return super().get_search_results(request, queryset, search_term)
+
     def get_urls(self):
         from django.urls import path
         return [path('tipos/', self.admin_site.admin_view(self.category_options), name='inventory_category_options')] + super().get_urls()
@@ -147,17 +191,93 @@ class AssetAdmin(StandardHistoryAdmin):
     def classification(self, obj):
         return format_html('<span class="itam-label">{}</span><br><span class="itam-secondary">{}</span>', obj.category.get_group_display() or 'Sin grupo (legado)', obj.category.name)
 
+    def can_assign_from_form(self, request, obj):
+        from assignments.models import Assignment
+        from employees.models import Employee
+
+        can_save = (
+            self.has_add_permission(request) if obj is None
+            else obj.status == AssetStatus.AVAILABLE and self.has_change_permission(request, obj)
+        )
+        return (
+            can_save
+            and self.admin_site.get_model_admin(Assignment).has_add_permission(request)
+            and self.admin_site.get_model_admin(Employee).has_view_permission(request)
+        )
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        if self.can_assign_from_form(request, obj):
+            return (*fieldsets, ('Asignación', {
+                'fields': ('assignment_employee', 'assignment_condition'),
+                'classes': ('itam-registration-assignment',),
+            }))
+        return fieldsets
+
     def get_form(self, request, obj=None, **kwargs):
-        form = super().get_form(request, obj, **kwargs)
+        if self.can_assign_from_form(request, obj):
+            from assignments.models import Assignment
+            from django.contrib.admin.widgets import AutocompleteSelect
+
+            kwargs['form'] = AssetWithAssignmentForm
+            form = super().get_form(request, obj, **kwargs)
+            if 'assignment_employee' in form.base_fields:
+                field = form.base_fields['assignment_employee']
+                field.widget = AutocompleteSelect(Assignment._meta.get_field('employee'), self.admin_site)
+                field.widget.choices = field.choices
+        else:
+            form = super().get_form(request, obj, **kwargs)
         for name, label in (("company", "Compañía administradora"), ("owner_company", "Compañía propietaria"),
                             ("site", "Ciudad / ubicación física")):
             if name in form.base_fields:
                 form.base_fields[name].label = label
         if "site" in form.base_fields:
             form.base_fields["site"].help_text = "Ubicación física del activo; no requiere asociación con una compañía."
+        if obj is None and 'model' in form.base_fields:
+            widget = form.base_fields['model'].widget
+            widget.can_add_related = self.has_add_permission(request)
+            widget.can_change_related = False
         return form
 
+    def save_model(self, request, obj, form, change):
+        if change and getattr(form, 'assign_on_save', False):
+            # Django Admin mantiene este bloqueo hasta que se guarda la custodia.
+            status = (Asset.objects.using(obj._state.db).select_for_update()
+                      .filter(pk=obj.pk).values_list('status', flat=True).first())
+            if status != AssetStatus.AVAILABLE:
+                raise ValidationError('El activo ya no está disponible para una nueva asignación.')
+        super().save_model(request, obj, form, change)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        if getattr(form, 'assign_on_save', False):
+            from assignments.services import create_assignment
+
+            assignment = create_assignment(
+                asset_id=form.instance.pk,
+                employee_id=form.cleaned_data['assignment_employee'].pk,
+                assigned_by=request.user,
+                initial_condition=form.cleaned_data['assignment_condition'],
+            )
+            form.instance.status = assignment.asset.status
+            request.itam_saved_assignment = assignment.pk
+
+    def response_add(self, request, obj, post_url_continue=None):
+        if hasattr(request, 'itam_saved_assignment') and IS_POPUP_VAR not in request.POST:
+            return HttpResponseRedirect(reverse('admin:assignments_assignment_act', args=[request.itam_saved_assignment]) + '?confirmada=1')
+        return super().response_add(request, obj, post_url_continue)
+
+    def response_change(self, request, obj):
+        if hasattr(request, 'itam_saved_assignment') and IS_POPUP_VAR not in request.POST:
+            return HttpResponseRedirect(reverse('admin:assignments_assignment_act', args=[request.itam_saved_assignment]) + '?confirmada=1')
+        return super().response_change(request, obj)
+
     def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
+        if add:
+            context['asset_model_catalog'] = list(
+                ModelAsset.objects.filter(brand__isnull=False)
+                .order_by('name', 'pk').values('id', 'name', 'brand_id')
+            )
         if obj is not None:
             from .timeline import asset_timeline
             context["asset_timeline"] = asset_timeline(request, obj, self.admin_site)
@@ -173,6 +293,10 @@ class AssetAdmin(StandardHistoryAdmin):
             from assignments.models import Assignment
             ma = self.admin_site._registry[MaintenanceRecord]
             aa = self.admin_site._registry[Assignment]
+            if context['asset_detail'] and self.can_assign_from_form(request, obj):
+                context['asset_assignment_url'] = (
+                    reverse('admin:assignments_assignment_add') + '?' + urlencode({'asset': obj.pk})
+                )
             documents = []
             if aa.has_view_permission(request):
                 for assignment in aa.get_queryset(request).filter(asset=obj).exclude(signed_act_pdf='').exclude(signed_act_pdf__isnull=True):
@@ -203,7 +327,7 @@ class AssetAdmin(StandardHistoryAdmin):
         ) if value) or "-"
     brand_model.short_description = "Marca y Modelo"
     class Media:
-        js = ('js/hide_change_reason.js', 'itam/asset-form.js')
+        js = ('js/hide_change_reason.js',)
 
 # --- SEPARACIÓN DEL CEMENTERIO DE ACTIVOS ---
 from django.apps import apps

@@ -1,10 +1,11 @@
-from inventory.navigation import AssetLinkAdminMixin
+from inventory.navigation import AssetLinkAdminMixin, asset_link
 from core.admin_audit import StandardHistoryAdmin
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.options import IS_POPUP_VAR
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
-from django.http import FileResponse, HttpResponseRedirect
+from django.http import FileResponse, HttpResponseBadRequest, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
@@ -20,7 +21,7 @@ from .models import (
     OffboardingRecordItem,
 )
 from .services import create_assignment, link_return_to_decommission
-from .utils import generate_act_pdf
+from .utils import AssignmentActError, issue_assignment_act
 
 
 class AssignmentAdminForm(forms.ModelForm):
@@ -60,14 +61,13 @@ def generate_pdf_action(modeladmin, request, queryset):
 
     for obj in queryset:
         try:
-            generate_act_pdf(obj)
-            obj.save(update_fields=["signed_act_pdf"])
+            issue_assignment_act(obj.pk, actor=request.user)
             generated += 1
 
-        except Exception as e:
+        except AssignmentActError:
             modeladmin.message_user(
                 request,
-                f"Error: {e}",
+                "No se pudo generar el acta.",
                 level=messages.ERROR,
             )
 
@@ -206,6 +206,57 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         obj._state.adding = False
         obj._state.db = assignment._state.db
 
+    def get_urls(self):
+        return [
+            path("<uuid:assignment_id>/acta/", self.admin_site.admin_view(self.act_view),
+                 name="assignments_assignment_act"),
+        ] + super().get_urls()
+
+    def response_add(self, request, obj, post_url_continue=None):
+        if IS_POPUP_VAR in request.POST:
+            return super().response_add(request, obj, post_url_continue)
+        url = reverse("admin:assignments_assignment_act", args=[obj.pk])
+        return HttpResponseRedirect(url + "?confirmada=1")
+
+    def act_view(self, request, assignment_id):
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+        assignment = get_object_or_404(
+            self.get_queryset(request).select_related("asset", "employee"), pk=assignment_id,
+        )
+        can_generate = self.can_generate_delivery_act(request, assignment)
+        if request.method == "POST":
+            if not can_generate:
+                raise PermissionDenied
+            mode = request.POST.get("mode")
+            if mode not in ("delivery", "consolidated"):
+                return HttpResponseBadRequest("Selecciona una modalidad de acta válida.")
+            try:
+                issue_assignment_act(assignment.pk, actor=request.user, include_active_custody=mode == "consolidated")
+            except AssignmentActError as error:
+                message = str(error) or "No se pudo generar el acta."
+                self.message_user(request, f"{message} La asignación sigue registrada.", messages.ERROR)
+            else:
+                self.message_user(request, "Acta PDF generada.", messages.SUCCESS)
+            return redirect("admin:assignments_assignment_act", assignment_id=assignment.pk)
+
+        previous_acts = (
+            assignment.history.exclude(signed_act_pdf__isnull=True)
+            .exclude(signed_act_pdf__in=["", assignment.signed_act_pdf.name or ""])
+            .order_by("signed_act_pdf", "history_date", "history_id").distinct("signed_act_pdf")
+            .values("history_date", "history_id", "history_change_reason")
+        )
+        return render(request, "assignments/act_confirmation.html", {
+            **self.admin_site.each_context(request),
+            "title": "Actas de asignación",
+            "assignment": assignment,
+            "delivery_assets": [asset_link(request, assignment.asset, self.admin_site)],
+            "show_selector": can_generate and request.GET.get("confirmada") == "1",
+            "can_generate": can_generate,
+            "return_pdf_url": self.return_pdf_url(request, assignment),
+            "previous_acts": sorted(previous_acts, key=lambda entry: entry["history_date"], reverse=True),
+        })
+
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("offboarding_item__offboarding_record")
 
@@ -247,24 +298,46 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
             "download_pdf",
         )
 
+    def can_generate_delivery_act(self, request, assignment):
+        return (
+            assignment.status == AssignmentStatus.ACTIVE and assignment.returned_at is None
+            and self.has_add_permission(request)
+        )
+
+    def return_pdf_url(self, request, assignment):
+        item = getattr(assignment, "offboarding_item", None)
+        if item and item.offboarding_record.pdf:
+            record_admin = self.admin_site.get_model_admin(OffboardingRecord)
+            if record_admin.can_view_receipt(request, item.offboarding_record):
+                return reverse("admin:assignments_offboardingrecord_view_pdf", args=[item.offboarding_record_id])
+        return None
+
     @admin.display(description="Acta PDF")
     def download_pdf(self, obj, request=None):
         if not obj:
             return "—"
+        if request is None:
+            if obj.signed_act_pdf:
+                return format_html('<a href="{}">Acta de entrega</a>', reverse("download_act_pdf", args=[obj.pk]))
+            return "—"
         links = []
-        if obj.signed_act_pdf:
-            links.append(("", reverse("download_act_pdf", args=[obj.pk]), "Acta de entrega"))
-        item = getattr(obj, "offboarding_item", None) if request is not None else None
-        if (item and item.offboarding_record.pdf and
-                self.admin_site._registry[OffboardingRecord].can_view_receipt(request, item.offboarding_record)):
+        return_url = self.return_pdf_url(request, obj)
+        if return_url:
+            links.append((return_url, "Acta de devolución"))
+        if self.can_generate_delivery_act(request, obj):
             links.append((
-                "button itam-primary",
-                reverse("admin:assignments_offboardingrecord_view_pdf", args=[item.offboarding_record_id]),
-                "Acta de devolución",
+                reverse("admin:assignments_assignment_act", args=[obj.pk]), "Gestionar acta",
             ))
-        return format_html_join(
-            " · ", '<a class="{}" href="{}" target="_blank" rel="noopener">{}</a>', links,
-        ) or "—"
+        elif obj.signed_act_pdf:
+            links.append((
+                reverse("admin:assignments_assignment_act", args=[obj.pk]), "Acta de entrega",
+            ))
+        if not links:
+            return "—"
+        actions = format_html_join(
+            "", '<a class="itam-table-action" href="{}" target="_blank" rel="noopener">{}</a>', links,
+        )
+        return format_html('<div class="itam-table-actions">{}</div>', actions)
 
 
 
@@ -325,7 +398,7 @@ class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
     )
     def active_assets_count(self, obj):
         return format_html(
-            '<span style="font-size:14px; font-weight:bold;">{}</span>',
+            '<span class="itam-label">{}</span>',
             obj.active_count,
         )
 
@@ -337,13 +410,7 @@ class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
         )
 
         return format_html(
-            '<a href="{}" target="_blank" '
-            'style="background:#28a745;'
-            'color:white;padding:5px 10px;'
-            'border-radius:4px;'
-            'text-decoration:none;'
-            'font-weight:bold;">'
-            "Generar y Ver Acta</a>",
+            '<a class="itam-table-action" href="{}" target="_blank" rel="noopener">Generar y ver acta</a>',
             url,
         )
 
@@ -402,11 +469,7 @@ class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
 
         if first_active:
             try:
-                generate_act_pdf(first_active)
-
-                first_active.save(
-                    update_fields=["signed_act_pdf"]
-                )
+                issue_assignment_act(first_active.pk, actor=request.user, include_active_custody=True)
 
                 return HttpResponseRedirect(
                     reverse(
@@ -415,10 +478,10 @@ class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
                     )
                 )
 
-            except Exception as e:
+            except AssignmentActError:
                 self.message_user(
                     request,
-                    f"Error al generar PDF: {e}",
+                    "No se pudo generar el acta.",
                     level=messages.ERROR,
                 )
 
@@ -519,7 +582,7 @@ class OffboardingRecordAdmin(StandardHistoryAdmin):
         )
 
         return format_html(
-            '<a class="button" href="{}" target="_blank">'
+            '<a class="itam-table-action" href="{}" target="_blank" rel="noopener">'
             "Ver / Descargar PDF</a>",
             url,
         )

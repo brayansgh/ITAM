@@ -22,6 +22,28 @@ class TicketNavigationTests(TestCase):
         self.asset_url=reverse("admin:inventory_asset_change",args=[self.asset.pk])
         self.client.force_login(self.user)
 
+    def test_maintenance_labels_and_asset_autocomplete(self):
+        self.user.first_name = "Persona"
+        self.user.last_name = "de Prueba"
+        self.user.save(update_fields=["first_name", "last_name"])
+        url = reverse("admin:maintenance_maintenancerecord_add")
+        listing = self.client.get(self.list_url)
+        self.assertContains(listing, "Añadir mantenimiento")
+        self.assertContains(listing, "Persona de Prueba")
+        page = self.client.get(url)
+        self.assertEqual(page.context["title"], "Añadir mantenimiento")
+        self.assertContains(page, 'data-ajax--url="/admin/autocomplete/"')
+        for control in ("add_id_asset", "change_id_asset", "view_id_asset", "add_id_reported_by"):
+            self.assertNotContains(page, control)
+        self.assertContains(page, "Persona de Prueba")
+        self.assertNotContains(page, "ticket_navigator - Administrador")
+        result = self.client.get(reverse("admin:autocomplete"), {
+            "app_label": "maintenance", "model_name": "maintenancerecord",
+            "field_name": "asset", "term": "NAV-001",
+        })
+        self.assertEqual(result.status_code, 200)
+        self.assertIn(str(self.asset.pk), [item["id"] for item in result.json()["results"]])
+
     def test_list_separates_ticket_management_from_asset_link_without_nested_anchors(self):
         response=self.client.get(self.list_url)
         self.assertEqual(response.status_code,200)
@@ -91,7 +113,7 @@ class TicketNavigationTests(TestCase):
         self.assertNotContains(form, 'name="provider"')
         self.assertNotContains(self.client.get(self.ticket_url), 'name="decommission_reason"')
         listing = self.client.get(reverse("admin:itam_decommissions"))
-        self.assertContains(listing, f'<a class="button" href="{url}">Abrir registro</a>')
+        self.assertContains(listing, f'<a class="itam-table-action" href="{url}">Abrir registro</a>')
         data = {
             "asset": str(self.asset.pk), "reported_by": str(self.user.pk),
             "description": ticket.description, "status": MaintenanceStatus.OPEN,

@@ -83,6 +83,18 @@ class OffboardingAuthorizationTests(TestCase):
         self.assertEqual(OffboardingRecord.objects.get().received_by, user)
         self.assertEqual(OffboardingRecordItem.objects.get().assignment, self.assignment)
 
+    def test_failed_pdf_rolls_back_retired_employee_return(self):
+        self.client.force_login(self.operator)
+        with patch("inventory.offboarding_pdf.generate_and_save_offboarding_pdf", side_effect=OSError):
+            response = self.client.post(self.url, self.data)
+        self.assertContains(response, "La devolución no se registró.")
+        self.assignment.refresh_from_db()
+        self.asset.refresh_from_db()
+        self.assertEqual(self.assignment.status, AssignmentStatus.ACTIVE)
+        self.assertEqual(self.asset.status, AssetStatus.ASSIGNED)
+        self.assertFalse(OffboardingRecord.objects.exists())
+        self.assertFalse(OffboardingRecordItem.objects.exists())
+
     def test_superuser_exception_is_preserved(self):
         self.client.force_login(self.operator)
         self.assertEqual(self.client.get(self.url).status_code, 200)
