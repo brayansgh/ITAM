@@ -19,7 +19,7 @@
     <section>
       <p class="entry-eyebrow">Portal interno</p>
       <h1 id="itam-entry-title">Gestión de activos tecnológicos</h1>
-      <p class="entry-intro">Consulta el inventario y sigue el ciclo de vida de los activos, desde la asignación hasta la baja.</p>
+      <p class="entry-intro">Consulta el inventario y sigue el ciclo de vida de los activos.</p>
       {% if request.user.is_active and request.user.is_staff %}
       <a class="entry-access" href="{% url 'admin:index' %}">Ir al panel <span aria-hidden="true">→</span></a>
       {% else %}
@@ -36,6 +36,6 @@
       </ul>
     </section>
   </main>
-  <footer><span>C.I. Acepalma S.A.</span><span>Dirección de Tecnología</span></footer>
+  <footer><span><a href="https://acepalma.com/" target="_blank">C.I. Acepalma S.A.</a></span><span>Dirección de Tecnología</span></footer>
 </body>
 </html>
