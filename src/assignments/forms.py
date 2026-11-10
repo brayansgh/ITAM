@@ -76,6 +76,20 @@ class ActiveReturnForm(forms.Form):
     def __init__(self, *args, assignments, can_request_decommission, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["assignments"].queryset = assignments
-        self.fields["assignments"].label_from_instance = lambda assignment: str(assignment.asset)
+        self.fields["assignments"].label_from_instance = self.asset_label
         if not can_request_decommission:
             del self.fields["request_decommission"]
+
+    @staticmethod
+    def asset_label(assignment):
+        asset = assignment.asset
+        parts = [str(asset), asset.category.name]
+        parts.extend(str(value) for value in (asset.brand, asset.model) if value)
+        network = getattr(asset, "network", None)
+        if network and network.hostname:
+            parts.append(f"Equipo {network.hostname}")
+        if asset.serial_number:
+            parts.append(f"Serie {asset.serial_number}")
+        if assignment.due_on:
+            parts.append(f"Préstamo hasta el {assignment.due_on:%d/%m/%Y}")
+        return " · ".join(parts)

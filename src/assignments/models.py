@@ -1,6 +1,7 @@
 from simple_history.models import HistoricalRecords
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 from core.models import BaseModel
 from inventory.models import Asset
 from employees.models import Employee
@@ -69,6 +70,12 @@ class Assignment(BaseModel):
         verbose_name="Acta de Entrega (PDF)",
     )
     delivery_id = models.UUIDField(null=True, editable=False, db_index=True)
+
+    due_on = models.DateField(null=True, blank=True, editable=False, verbose_name="Devolución prevista")
+
+    @property
+    def loan_overdue(self):
+        return self.due_on and self.status == AssignmentStatus.ACTIVE and self.due_on < timezone.localdate()
 
     def delivery_assignments(self):
         assignments = type(self).objects.all()
@@ -139,6 +146,7 @@ class ReturnReason(models.TextChoices):
     OBSOLESCENCE = "OBSOLESCENCE", "Obsolescencia"
     DAMAGE = "DAMAGE", "Daño"
     REPLACEMENT = "REPLACEMENT", "Cambio de activo"
+    LOAN_END = "LOAN_END", "Fin del préstamo"
     OTHER = "OTHER", "Otro motivo"
 
 

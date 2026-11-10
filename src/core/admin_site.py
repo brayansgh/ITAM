@@ -245,7 +245,7 @@ class ITAMAdminSite(AdminSite):
                 continue
             if kind == 'entrega':
                 url = reverse('download_act_pdf', args=[obj.pk])
-                label = 'Entrega de activos' if obj.delivery_id else str(obj.asset)
+                label = 'Préstamo de activos' if obj.due_on else ('Entrega de activos' if obj.delivery_id else str(obj.asset))
             elif kind in ('devolucion', 'desvinculacion'):
                 url, label = reverse('admin:assignments_offboardingrecord_view_pdf', args=[obj.pk]), str(obj.employee)
             else:

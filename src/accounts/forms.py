@@ -27,13 +27,16 @@ class AccountUserChangeForm(UserChangeForm):
             password.widget = PasswordStatusWidget()
             if self.instance.pk:
                 password.help_text = format_html(
-                    '<a href="{}">Cambiar contraseña</a>',
+                    '<a class="button itam-primary itam-password-action" href="{}">Cambiar contraseña</a>',
                     reverse("admin:auth_user_password_change", args=[self.instance.pk]),
                 )
+        if "groups" in self.fields:
+            groups = self.fields["groups"]
+            groups.widget = forms.CheckboxSelectMultiple(choices=groups.choices)
         descriptions = {
             "role": "Controla los flujos de ITAM. No asigna automáticamente permisos de Django.",
             "is_staff": "Permite entrar al administrador. Los grupos y permisos determinan qué módulos puede usar.",
-            "groups": "Asigna grupos para administrar permisos compartidos. El usuario hereda sus permisos.",
+            "groups": "Marca los grupos que debe tener el usuario y guarda los cambios.",
             "user_permissions": "Permisos adicionales para este usuario. Úsalos solo cuando los grupos no sean suficientes.",
         }
         for name, description in descriptions.items():

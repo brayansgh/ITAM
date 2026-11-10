@@ -10,7 +10,7 @@ from accounts.models import Role, User
 from accounts.test_access_profiles import support_operator
 from assignments.models import AssignmentStatus, OffboardingRecord, ReturnReason
 from assignments.services import create_assignment
-from inventory.models import Asset, AssetStatus, Category
+from inventory.models import Asset, AssetNetwork, AssetStatus, Category
 from maintenance.models import MaintenanceRecord, MaintenanceStatus, MaintenanceType
 from organizations.models import Company
 from .models import Employee, EmployeeStatus
@@ -47,6 +47,10 @@ class ActiveReturnsTests(TestCase):
         self.assertContains(page, self.employee.full_name, count=1)
         self.assertContains(page, "<summary>Acciones</summary>", html=True)
         self.assertContains(page, f'<a href="{self.url}">Devolver activos</a>', html=True)
+        loan_url = reverse("admin:assignments_assignment_loan") + f"?employee={self.employee.pk}"
+        self.assertContains(page, f'<a href="{loan_url}">Prestar activos</a>', html=True)
+        loan = self.client.get(loan_url)
+        self.assertEqual(loan.context["form"].initial["employee"], str(self.employee.pk))
         self.assertContains(page, f'<a href="{history_url}">Ver histórico</a>', count=1, html=True)
         self.assertContains(page, "button itam-primary")
         self.assertContains(page, "itam-employee-secondary")
@@ -64,6 +68,21 @@ class ActiveReturnsTests(TestCase):
         self.assertNotContains(page, "Asignar activo")
         self.assertNotContains(page, "Editar empleado")
         self.assertNotContains(page, "Devolver activos")
+        self.assertNotContains(page, "Prestar activos")
+
+    def test_return_options_include_equipment_details_and_reject_loan_reason_for_ordinary_custody(self):
+        asset = self.assignments[0].asset
+        asset.legacy_asset_tag = "PL-101"
+        asset.serial_number = "SERIE-101"
+        asset.save(update_fields=["legacy_asset_tag", "serial_number"])
+        AssetNetwork.objects.create(asset=asset, hostname="EQUIPO-101")
+        page = self.client.get(self.url)
+        for label in ("PL-101", "RET-000", "Equipo de prueba", "EQUIPO-101", "SERIE-101", "Fin del préstamo"):
+            self.assertContains(page, label)
+        result = self.client.post(self.url, {**self.data, "reason": ReturnReason.LOAN_END})
+        self.assertContains(result, "Selecciona únicamente activos prestados")
+        self.assertFalse(OffboardingRecord.objects.exists())
+        self.assertEqual(self.assignments[0].asset.assignments.get().status, AssignmentStatus.ACTIVE)
 
     def test_one_pdf_contains_all_selected_assets_and_keeps_employee_active(self):
         self.user = support_operator(self.user)

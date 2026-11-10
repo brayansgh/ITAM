@@ -47,10 +47,11 @@
                         {% if has_change_permission %}
                             <a class="itam-employee-secondary" href="{{ employee_edit_url }}">Editar empleado</a>
                         {% endif %}
-                        {% if active_return_url or employee_history_url or employee_offboarding_url %}
+                        {% if employee_loan_url or active_return_url or employee_history_url or employee_offboarding_url %}
                             <details class="itam-employee-menu">
                                 <summary>Acciones</summary>
                                 <ul>
+                                    {% if employee_loan_url %}<li><a href="{{ employee_loan_url }}">Prestar activos</a></li>{% endif %}
                                     {% if employee_offboarding_url %}<li><a href="{{ employee_offboarding_url }}">Desvinculación</a></li>{% endif %}
                                     {% if active_return_url %}<li><a href="{{ active_return_url }}">Devolver activos</a></li>{% endif %}
                                     {% if employee_history_url %}<li><a href="{{ employee_history_url }}">Ver histórico</a></li>{% endif %}

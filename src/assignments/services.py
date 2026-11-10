@@ -12,7 +12,7 @@ from inventory.models import AssetStatus
 from .models import Assignment, AssignmentStatus
 
 
-def create_delivery(*, employee_id, assigned_by, items, observations):
+def create_delivery(*, employee_id, assigned_by, items, observations, due_on=None):
     from .utils import AssignmentActError, discard_new_act, generate_act_pdf, save_assignment_act
 
     asset_ids = {item["asset_id"] for item in items}
@@ -28,7 +28,7 @@ def create_delivery(*, employee_id, assigned_by, items, observations):
             assignments = [
                 create_assignment(
                     employee_id=employee_id, assigned_by=assigned_by,
-                    observations=observations, delivery_id=delivery_id, **item,
+                    observations=observations, delivery_id=delivery_id, due_on=due_on, **item,
                 )
                 for item in items
             ]
@@ -109,12 +109,15 @@ def return_assignment(*, assignment_id, condition, returned_by=None):
 
     return assignment
 @transaction.atomic
-def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition, observations=None, delivery_id=None):
+def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition, observations=None, delivery_id=None, due_on=None):
     """
     Crea una asignación y actualiza el estado del activo.
 
     Bloquea el activo para evitar asignaciones simultáneas.
     """
+
+    if due_on is not None and due_on < timezone.localdate():
+        raise ValidationError("La devolución prevista debe ser hoy o una fecha futura.")
 
     # 1. Validar la condición inicial.
     initial_condition = (initial_condition or "").strip()
@@ -159,6 +162,7 @@ def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition, 
         initial_condition=initial_condition,
         observations=observations,
         delivery_id=delivery_id,
+        due_on=due_on,
         status=AssignmentStatus.ACTIVE,
     )
 
@@ -229,6 +233,8 @@ def register_active_returns(*, employee, assignments, reason, condition, observa
     selected = sorted(assignments, key=lambda assignment: assignment.asset_id)
     if not selected or any(assignment.employee_id != employee.pk for assignment in selected):
         raise ValidationError("Selecciona los activos vigentes de este empleado.")
+    if reason == ReturnReason.LOAN_END and any(assignment.due_on is None for assignment in selected):
+        raise ValidationError("Selecciona únicamente activos prestados para registrar el fin del préstamo.")
     record = None
     try:
         with transaction.atomic():

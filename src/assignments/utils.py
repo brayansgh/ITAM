@@ -29,6 +29,7 @@ def generate_act_pdf(assignment, *, include_active_custody=False):
         'employee': assignment.employee,
         'assignments': assignments,
         'consolidated': include_active_custody,
+        'due_on': delivery.due_on if not include_active_custody else None,
         'show_conditions': grouped_delivery,
         'initial_condition': assignment.initial_condition if not (include_active_custody or grouped_delivery) else '',
         'assigned_by': assignment.assigned_by,
@@ -63,6 +64,8 @@ def issue_assignment_act(assignment_id, *, actor, include_active_custody=False):
             previous_file = assignment.signed_act_pdf.name
             if assignment.status != AssignmentStatus.ACTIVE or assignment.returned_at is not None:
                 raise AssignmentActError("La asignación ya no está vigente.")
+            if assignment.due_on and include_active_custody:
+                raise AssignmentActError("El acta de este préstamo debe conservar los datos de su entrega.")
             generate_act_pdf(assignment, include_active_custody=include_active_custody)
             save_assignment_act(assignment, recipients, actor=actor, custody=include_active_custody)
     except Exception as error:

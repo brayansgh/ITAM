@@ -31,7 +31,7 @@ class AccountUserAdminMixin(PermissionChangeAuditMixin):
         ("Cuenta", {"fields": ("username", "password")}),
         ("Información personal", {"fields": ("first_name", "last_name", "email")}),
         ("Acceso a ITAM", {"fields": ("role", "is_active", "is_staff")}),
-        ("Permisos por grupo", {"fields": ("groups",), "description": "Utiliza grupos para asignar conjuntos de permisos."}),
+        ("Permisos por grupo", {"fields": ("groups",), "description": "El usuario hereda los permisos de los grupos marcados."}),
         ("Permisos individuales y acceso total", {"fields": ("user_permissions", "is_superuser"), "classes": ("collapse",)}),
         ("Fechas de la cuenta", {"fields": ("last_login", "date_joined"), "classes": ("collapse",)}),
     )

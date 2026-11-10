@@ -17,7 +17,7 @@
 <section class="itam-panel itam-act-card" aria-labelledby="assignment-confirmed">
     <header class="itam-act-header">
         <div>
-            <h2 id="assignment-confirmed">Asignación registrada</h2>
+            <h2 id="assignment-confirmed">{% if assignment.due_on %}Préstamo registrado{% else %}Asignación registrada{% endif %}</h2>
             <span class="itam-label">{% if assignment.signed_act_pdf %}PDF disponible{% elif can_generate %}Acta pendiente{% else %}Acta de entrega no disponible{% endif %}</span>
         </div>
         <div class="itam-act-actions">
@@ -42,6 +42,7 @@
         <dd>{% for asset in delivery_assets %}{{ asset }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd>
         <dt>Empleado responsable</dt><dd>{{ assignment.employee }}</dd>
         <dt>Fecha de entrega</dt><dd>{{ assignment.assigned_at|date:"d/m/Y H:i T" }}</dd>
+        {% if assignment.due_on %}<dt>Devolución prevista</dt><dd>{{ assignment.due_on|date:"d/m/Y" }}{% if assignment.loan_overdue %} · Vencido{% endif %}</dd>{% endif %}
         <dt>Estado de la asignación</dt><dd>{{ assignment.get_status_display }}</dd>
     </dl>
     {% if can_generate %}
@@ -59,11 +60,12 @@
                     <button class="itam-act-option" type="submit" name="mode" value="delivery"
                             aria-labelledby="act-delivery-title" aria-describedby="act-delivery-help">
                         <span class="itam-act-option-copy">
-                            <strong id="act-delivery-title">Acta de entrega de esta asignación</strong>
+                            <strong id="act-delivery-title">{% if assignment.due_on %}Acta de préstamo{% else %}Acta de entrega de esta asignación{% endif %}</strong>
                             <span id="act-delivery-help">Incluye los activos entregados en esta operación.</span>
                         </span>
                         <span class="itam-act-option-arrow" aria-hidden="true">→</span>
                     </button>
+                    {% if not assignment.due_on %}
                     <button class="itam-act-option" type="submit" name="mode" value="consolidated"
                             aria-labelledby="act-consolidated-title" aria-describedby="act-consolidated-help">
                         <span class="itam-act-option-copy">
@@ -72,6 +74,7 @@
                         </span>
                         <span class="itam-act-option-arrow" aria-hidden="true">→</span>
                     </button>
+                    {% endif %}
                 </div>
                 <footer class="itam-act-selector-footer">
                     <a id="dismiss-act-selector" class="itam-act-secondary" href="{{ assignment_url }}">Posponer</a>

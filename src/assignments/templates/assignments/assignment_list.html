@@ -1,0 +1,22 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'itam/employee-profile.css' %}?v=2">
+    <link rel="stylesheet" href="{% static 'itam/assignment-workflow.css' %}">
+{% endblock %}
+
+{% block object-tools %}
+    {% if has_add_permission %}
+        <div class="itam-assignment-list-actions">
+            <details class="itam-employee-menu">
+                <summary>Acciones</summary>
+                <ul>
+                    <li><a href="{% url 'admin:assignments_assignment_loan' %}">Prestar activos</a></li>
+                    <li><a href="{% url 'admin:assignments_assignment_add' %}">Añadir historial de asignación</a></li>
+                </ul>
+            </details>
+        </div>
+    {% endif %}
+{% endblock %}

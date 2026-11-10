@@ -9,6 +9,7 @@ from django.db.models import Count, Q
 from django.http import FileResponse, HttpResponseBadRequest, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from accounts.models import Role
@@ -85,9 +86,32 @@ def generate_pdf_action(modeladmin, request, queryset):
         )
 
 
+class LoanFilter(admin.SimpleListFilter):
+    title = "Préstamos"
+    parameter_name = "prestamo"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("vigentes", "Vigentes dentro del plazo"),
+            ("vencidos", "Vencidos"),
+            ("devueltos", "Devueltos"),
+        )
+
+    def queryset(self, request, queryset):
+        today = timezone.localdate()
+        if self.value() == "vigentes":
+            return queryset.filter(status=AssignmentStatus.ACTIVE, due_on__gte=today)
+        if self.value() == "vencidos":
+            return queryset.filter(status=AssignmentStatus.ACTIVE, due_on__lt=today)
+        if self.value() == "devueltos":
+            return queryset.filter(status=AssignmentStatus.RETURNED, due_on__isnull=False)
+        return queryset
+
+
 @admin.register(Assignment)
 class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
     change_form_template = "assignments/assignment_detail.html"
+    change_list_template = "assignments/assignment_list.html"
     add_form_template = "admin/change_form.html"
 
     exclude = ("signed_act_pdf",)
@@ -98,10 +122,12 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         "assigned_by",
         "assigned_at",
         "status",
+        "loan_due_date",
         "download_pdf",
     )
 
     list_filter = (
+        LoanFilter,
         "status",
         "assigned_at",
         "asset__company",
@@ -121,18 +147,36 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
     actions = [generate_pdf_action]
     form = AssignmentAdminForm
 
+    @admin.display(description="Devolución prevista", ordering="due_on")
+    def loan_due_date(self, obj):
+        if obj.due_on:
+            return f"{obj.due_on:%d/%m/%Y}" + (" · Vencido" if obj.loan_overdue else "")
+        return None
+
+    def loan_view(self, request):
+        return self.delivery_view(request, loan=True)
+
     def add_view(self, request, form_url="", extra_context=None):
         # Conservar el alta tradicional de ventanas emergentes y formularios anteriores.
         if (IS_POPUP_VAR in request.GET or IS_POPUP_VAR in request.POST
                 or (request.method == "POST" and "_save" in request.POST
                     and not any(key.startswith("activos-") for key in request.POST))):
             return super().add_view(request, form_url, extra_context)
+        return self.delivery_view(request, extra_context=extra_context)
+
+    def delivery_view(self, request, *, loan=False, extra_context=None):
         if not self.has_add_permission(request):
             raise PermissionDenied
 
         data = request.POST if request.method == "POST" else None
         form_class = self.get_form(request)
         form = form_class(data, initial=self.get_changeform_initial_data(request))
+        if loan:
+            form.fields["due_on"] = forms.DateField(
+                label="Devolución prevista",
+                input_formats=["%Y-%m-%d"],
+                widget=forms.DateInput(attrs={"type": "date", "min": timezone.localdate().isoformat()}),
+            )
         form.fields["initial_condition"].widget.attrs["rows"] = 3
         form.fields["observations"].widget.attrs["rows"] = 3
         extra_form = type("DeliveryItemForm", (forms.Form,), {
@@ -148,6 +192,7 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
                     employee_id=form.cleaned_data["employee"].pk,
                     assigned_by=request.user,
                     observations=form.cleaned_data["observations"],
+                    due_on=form.cleaned_data.get("due_on"),
                     items=[{
                         "asset_id": row["asset"].pk,
                         "initial_condition": row["initial_condition"],
@@ -158,14 +203,15 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
             except AssignmentActError as error:
                 form.add_error(None, str(error))
             else:
-                self.log_addition(request, assignment, "Entrega de activos registrada.")
-                self.message_user(request, "Entrega registrada y acta PDF generada.", messages.SUCCESS)
+                self.log_addition(request, assignment, "Préstamo de activos registrado." if loan else "Entrega de activos registrada.")
+                self.message_user(request, "Préstamo registrado y acta PDF generada." if loan else
+                                  "Entrega registrada y acta PDF generada.", messages.SUCCESS)
                 return redirect("admin:assignments_assignment_act", assignment_id=assignment.pk)
-
         return render(request, "assignments/delivery_form.html", {
             **self.admin_site.each_context(request),
             **(extra_context or {}),
-            "title": "Asignar activos",
+            "title": "Prestar activos" if loan else "Asignar activos",
+            "loan": loan,
             "opts": self.opts,
             "form": form,
             "adminform": AdminForm(form, [], {}),
@@ -209,9 +255,19 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
 
     def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
         if obj is not None and not add:
+            if obj.due_on and obj.status == AssignmentStatus.ACTIVE:
+                from employees.models import Employee, EmployeeStatus
+
+                employee_admin = self.admin_site.get_model_admin(Employee)
+                if (obj.employee.status == EmployeeStatus.ACTIVE
+                        and employee_admin.can_process_offboarding(request, obj.employee)):
+                    context["loan_return_url"] = reverse(
+                        "admin:employees_employee_return_assets", args=[obj.employee_id],
+                    )
             context.update(
-                title="Consultar asignación",
+                title="Consultar préstamo" if obj.due_on else "Consultar asignación",
                 assignment_asset=asset_link(request, obj.asset, self.admin_site),
+                can_view_assignment_history=self.has_view_history_or_change_history_permission(request, obj),
                 assignment_documents=self.download_pdf(obj, request),
             )
         return super().render_change_form(request, context, add, change, form_url, obj)
@@ -274,6 +330,7 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
 
     def get_urls(self):
         return [
+            path("prestar/", self.admin_site.admin_view(self.loan_view), name="assignments_assignment_loan"),
             path("<uuid:assignment_id>/acta/", self.admin_site.admin_view(self.act_view),
                  name="assignments_assignment_act"),
         ] + super().get_urls()
@@ -353,6 +410,7 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
                 "assigned_by",
                 "assigned_at",
                 "returned_at",
+                "due_on",
                 "initial_condition",
                 "return_condition",
                 "status",
@@ -401,7 +459,8 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
             ))
         elif obj.signed_act_pdf:
             links.append((
-                reverse("admin:assignments_assignment_act", args=[obj.pk]), "Acta de entrega",
+                reverse("admin:assignments_assignment_act", args=[obj.pk]),
+                "Acta de préstamo" if obj.due_on else "Acta de entrega",
             ))
         if not links:
             return "—"

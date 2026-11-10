@@ -37,7 +37,16 @@ class AccountAdminTests(TestCase):
         self.assertNotContains(response, "pbkdf2_sha256")
         self.assertNotContains(response, self.target.password)
         change_password_url = reverse("admin:auth_user_password_change", args=[self.target.pk])
-        self.assertContains(response, f'href="{change_password_url}"')
+        self.assertContains(response, f'<a class="button itam-primary itam-password-action" href="{change_password_url}">Cambiar contraseña</a>', html=True)
+
+    def test_groups_render_as_checkboxes_with_current_memberships(self):
+        self.target.groups.add(self.group)
+        available = Group.objects.create(name="Otro grupo de prueba")
+        response = self.client.get(self.change_url)
+        self.assertContains(response, f'<input type="checkbox" name="groups" value="{self.group.pk}" id="id_groups_0" checked>', html=True)
+        self.assertContains(response, f'<input type="checkbox" name="groups" value="{available.pk}" id="id_groups_1">', html=True)
+        self.assertNotContains(response, 'id="add_id_groups"')
+        self.assertNotContains(response, '<select name="groups"')
 
     def test_password_submission_cannot_overwrite_hash(self):
         previous = self.target.password

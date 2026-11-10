@@ -51,6 +51,6 @@ def download_act_pdf(request, assignment_id):
     except FileNotFoundError as error:
         raise Http404("El acta PDF no está disponible.") from error
     return FileResponse(
-        pdf, content_type="application/pdf", filename="acta-de-entrega.pdf",
+        pdf, content_type="application/pdf", filename="acta-de-prestamo.pdf" if assignment.due_on else "acta-de-entrega.pdf",
         as_attachment=request.GET.get("descargar") == "1",
     )

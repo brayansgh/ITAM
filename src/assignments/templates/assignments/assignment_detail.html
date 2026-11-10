@@ -1,11 +1,36 @@
 {% extends "admin/change_form.html" %}
 
+{% load static %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'itam/assignment-workflow.css' %}">
+{% endblock %}
+
+{% block object-tools %}{% endblock %}
+{% block content_subtitle %}{% endblock %}
+
+{% block content_title %}
+<header class="itam-page-heading">
+    <div>
+        <h1>{{ title }}</h1>
+        <p>Consulta la custodia, las condiciones y las actas del activo.</p>
+    </div>
+    <span class="itam-label">Solo consulta</span>
+</header>
+{% endblock %}
+
 {% block content %}
 <div id="content-main" class="itam-detail-panels">
-    <div class="itam-table-actions">
-        <a class="itam-table-action" href="{% url 'admin:assignments_assignment_changelist' %}">Volver al listado</a>
-        <a class="button itam-primary" href="{% url 'admin:assignments_assignment_history' original.pk %}">Ver historial de cambios</a>
-    </div>
+    <nav class="itam-panel itam-workflow-actions" aria-label="Acciones de la asignación">
+        <a class="itam-workflow-secondary" href="{% url 'admin:assignments_assignment_changelist' %}">Volver al listado</a>
+        {% if can_view_assignment_history %}
+            <a class="itam-workflow-secondary" href="{% url 'admin:assignments_assignment_history' original.pk %}">Ver historial de cambios</a>
+        {% endif %}
+        {% if loan_return_url %}
+            <a class="button itam-primary" href="{{ loan_return_url }}">Devolver activos</a>
+        {% endif %}
+    </nav>
     <div class="itam-details-grid">
         <section class="itam-panel" aria-labelledby="assignment-custody">
             <h2 id="assignment-custody">Custodia</h2>
@@ -15,6 +40,10 @@
                 <dt>Estado</dt><dd><span class="itam-label">{{ original.get_status_display }}</span></dd>
                 <dt>Asignado por</dt><dd>{{ original.assigned_by.get_display_name|default:"Sin responsable registrado" }}</dd>
                 <dt>Fecha de entrega</dt><dd>{{ original.assigned_at|date:"d/m/Y H:i T" }}</dd>
+                {% if original.due_on %}
+                    <dt>Devolución prevista del préstamo</dt>
+                    <dd>{{ original.due_on|date:"d/m/Y" }}{% if original.loan_overdue %} · Vencido{% endif %}</dd>
+                {% endif %}
                 <dt>Fecha de devolución</dt><dd>{{ original.returned_at|date:"d/m/Y H:i T"|default:"Sin fecha registrada" }}</dd>
             </dl>
         </section>

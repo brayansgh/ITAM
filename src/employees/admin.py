@@ -55,9 +55,9 @@ class EmployeeAdmin(StandardHistoryAdmin):
                 if (obj.status != EmployeeStatus.RETIRO
                         and aa.has_add_permission(request)
                         and self.admin_site.get_model_admin(Asset).has_view_permission(request)):
-                    context['employee_assignment_url'] = (
-                        reverse('admin:assignments_assignment_add') + '?' + urlencode({'employee': obj.pk})
-                    )
+                    employee_query = '?' + urlencode({'employee': obj.pk})
+                    context['employee_assignment_url'] = reverse('admin:assignments_assignment_add') + employee_query
+                    context['employee_loan_url'] = reverse('admin:assignments_assignment_loan') + employee_query
 
             if (context['employee_detail'] and obj.status == EmployeeStatus.ACTIVE
                     and self.can_process_offboarding(request, obj)
@@ -130,7 +130,8 @@ class EmployeeAdmin(StandardHistoryAdmin):
                 continue
             seen.add(name)
             documents.append({
-                "label": "Acta de entrega de activos" if assignment.delivery_id else f"Acta de entrega · {assignment.asset}",
+                "label": ("Acta de préstamo de activos" if assignment.due_on else
+                          "Acta de entrega de activos" if assignment.delivery_id else f"Acta de entrega · {assignment.asset}"),
                 "date": assignment.assigned_at,
                 "url": reverse("download_act_pdf", args=[assignment.pk]),
             })
@@ -314,7 +315,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
             raise PermissionDenied
         assignments = assignment_admin.get_queryset(request).filter(
             employee=employee, status=AssignmentStatus.ACTIVE,
-        ).select_related("asset").order_by("asset__asset_tag")
+        ).select_related("asset__category", "asset__brand", "asset__model", "asset__network").order_by("asset__asset_tag")
         maintenance_admin = self.admin_site._registry[MaintenanceRecord]
         can_decommission = maintenance_admin.can_manage_return_links(request)
         form = ActiveReturnForm(

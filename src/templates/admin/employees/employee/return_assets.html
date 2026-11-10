@@ -1,31 +1,62 @@
 {% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'itam/assignment-workflow.css' %}">
+{% endblock %}
+
 {% block bodyclass %}{{ block.super }} itam-change-form{% endblock %}
 {% block content_title %}
-<div class="itam-page-heading"><div><h1>{{ title }}</h1><p>{{ employee.full_name }} · {{ employee.company }}</p></div></div>
+<header class="itam-page-heading">
+    <div>
+        <h1>{{ title }}</h1>
+        <p>{{ employee.full_name }} · {{ employee.company }}</p>
+    </div>
+    <span class="itam-label">Recepción de activos</span>
+</header>
 {% endblock %}
+
 {% block content %}
-<p class="itam-notice">Selecciona los activos recibidos con el mismo motivo y condición. Se generará una sola acta con todos los activos seleccionados.</p>
+{% url 'admin:employees_employee_change' employee.pk as employee_url %}
 {% if has_assignments %}
-<form method="post" data-itam-return-form>
-  {% csrf_token %}
-  {{ form.non_field_errors }}
-  <fieldset class="module aligned">
-    <h2>Recepción de activos</h2>
-    {% for field in form %}
-      <div class="form-row">
-        {{ field.errors }}
-        {{ field.label_tag }}
-        {{ field }}
-        {% if field.name == 'request_decommission' %}<p class="help">Vincula un trámite por activo. Su cierre se realiza desde Bajas.</p>{% endif %}
-      </div>
-    {% endfor %}
-  </fieldset>
-  <div class="submit-row">
-    <input type="submit" value="Registrar devolución" class="default">
-    <a class="closelink" href="{% url 'admin:employees_employee_change' employee.pk %}">Cancelar</a>
-  </div>
+<form method="post" class="itam-detail-panels itam-return-form" data-itam-return-form>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <fieldset class="itam-panel itam-return-assets">
+        <legend>Activos recibidos</legend>
+        <p class="itam-note" id="itam-return-selection-help">Selecciona los activos que tengan el mismo motivo y condición de devolución.</p>
+        {{ form.assignments.errors }}
+        <div class="itam-return-choices" aria-describedby="itam-return-selection-help">
+            {% for choice in form.assignments %}<div>{{ choice }}</div>{% endfor %}
+        </div>
+    </fieldset>
+    <section class="itam-panel" aria-labelledby="itam-return-details">
+        <h2 id="itam-return-details">Datos de la devolución</h2>
+        <div class="itam-details-grid">
+            <div>{{ form.reason.as_field_group }}</div>
+            <div>{{ form.condition.as_field_group }}</div>
+            <div>{{ form.observations.as_field_group }}</div>
+            {% if form.request_decommission %}
+                <div class="itam-return-decommission-option">
+                    {{ form.request_decommission.errors }}
+                    {{ form.request_decommission }}
+                    {{ form.request_decommission.label_tag }}
+                    <p class="itam-note">Vincula un trámite por activo. Su cierre se realiza desde Bajas.</p>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+    <div class="itam-panel itam-workflow-actions">
+        <p class="itam-secondary">Se generará un acta para todos los activos seleccionados.</p>
+        <a class="itam-workflow-secondary" href="{{ employee_url }}">Cancelar</a>
+        <input type="submit" value="Registrar devolución" class="default">
+    </div>
 </form>
 {% else %}
-<section class="itam-panel"><p>Este empleado no tiene activos vigentes para devolver.</p><a href="{% url 'admin:employees_employee_change' employee.pk %}">Volver al empleado</a></section>
+<section class="itam-panel">
+    <p>Este empleado no tiene activos vigentes para devolver.</p>
+    <a class="itam-workflow-secondary" href="{{ employee_url }}">Volver al empleado</a>
+</section>
 {% endif %}
 {% endblock %}

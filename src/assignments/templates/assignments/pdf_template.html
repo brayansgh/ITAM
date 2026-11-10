@@ -27,6 +27,8 @@
 
     {% if consolidated %}
         {% include "assignments/pdf_header.html" with act_title="ACTA CONSOLIDADA" show_corporate_title=True %}
+    {% elif due_on %}
+        {% include "assignments/pdf_header.html" with act_title="ACTA DE PRÉSTAMO DE ACTIVOS" show_corporate_title=True %}
     {% else %}
         {% include "assignments/pdf_header.html" with act_title="ACTA DE ENTREGA" show_corporate_title=True %}
     {% endif %}
@@ -68,6 +70,12 @@
             <td width="20%" class="bg-gray bold text-center">{% if consolidated %}FECHA DE CORTE{% else %}FECHA DE ENTREGA{% endif %}</td>
             <td width="80%">{{ date|upper }}</td>
         </tr>
+        {% if due_on %}
+        <tr>
+            <td class="bg-gray bold text-center">DEVOLUCIÓN PREVISTA</td>
+            <td>{{ due_on|date:"d/m/Y" }}</td>
+        </tr>
+        {% endif %}
         {% if initial_condition %}
         <tr>
             <td class="bg-gray bold text-center">CONDICIÓN DE ENTREGA</td>
@@ -86,7 +94,11 @@
             <li>Utilizar el equipo estrictamente para desempeñar las labores asociadas al cargo.</li>
             <li>Notificar inmediatamente al área de Sistemas, incidencias con los equipos: fallas en funcionamiento, accidentes, pérdida o robo.</li>
             <li>No cambiar las configuraciones establecidas de los computadores ni de los celulares corporativos.</li>
+            {% if due_on %}
+            <li>Devolver los activos en la fecha acordada y en buen estado, salvo el deterioro por uso.</li>
+            {% else %}
             <li>Devolver todas las herramientas que me fueron asignadas en buen estado al momento de terminar la relación laboral, salvo el deterioro por uso.</li>
+            {% endif %}
             <li>No manipular, quitar, borrar las placas de los activos fijos que poseen los elementos entregados. En caso de desgaste o pérdida, notificar al área de Sistemas.</li>
             <li>Está prohibido realizar modificaciones, alteraciones o instalaciones de hardware y software en los activos corporativos. Cualquier requerimiento de cambio, actualización o instalación de software debe ser canalizado y aprobado exclusivamente por el área de TI para garantizar la compatibilidad y seguridad del sistema.</li>
             <li>Se prohíbe la conexión de dispositivos corporativos a redes Wi-Fi públicas, abiertas o no cifradas.</li>

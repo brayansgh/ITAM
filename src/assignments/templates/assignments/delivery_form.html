@@ -20,7 +20,7 @@
         <h1>{{ title }}</h1>
         <p>Selecciona al empleado y registra los activos que recibirá en esta entrega.</p>
     </div>
-    <span class="itam-label">Nueva entrega</span>
+    <span class="itam-label">{% if loan %}Nuevo préstamo{% else %}Nueva entrega{% endif %}</span>
 </header>
 {% endblock %}
 
@@ -34,6 +34,9 @@
         <h2 id="delivery-details-title">Datos de la entrega</h2>
         <div class="itam-details-grid">
             <div class="itam-delivery-field">{{ form.employee.as_field_group }}</div>
+            {% if loan %}
+                <div class="itam-delivery-field">{{ form.due_on.as_field_group }}</div>
+            {% endif %}
             <div class="itam-delivery-field">
                 {{ form.observations.errors }}
                 <label for="{{ form.observations.id_for_label }}">Observaciones generales</label>
@@ -65,7 +68,7 @@
         <p class="itam-secondary">Se generará un solo PDF con los activos de esta entrega.</p>
         <div class="itam-delivery-actions">
             <a href="{% url 'admin:assignments_assignment_changelist' %}" class="itam-delivery-secondary">Cancelar</a>
-            <input type="submit" name="_save" value="Registrar entrega y generar acta" class="default">
+            <input type="submit" name="_save" value="{% if loan %}Registrar préstamo y generar acta{% else %}Registrar entrega y generar acta{% endif %}" class="default">
         </div>
     </div>
 </form>

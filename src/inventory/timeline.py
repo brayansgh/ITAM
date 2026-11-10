@@ -54,8 +54,13 @@ def asset_timeline(request, asset, admin_site):
             if obj is None or not assignment_admin.has_view_permission(request, obj):
                 continue
             if row["event_kind"] == "assignment":
-                row.update(action="Asignación registrada", person=str(obj.assigned_by),
+                row.update(action="Préstamo registrado" if obj.due_on else "Asignación registrada",
+                           person=str(obj.assigned_by),
                            detail=f"{obj.employee.full_name} · {obj.initial_condition} · Estado actual: {obj.get_status_display()}")
+                if obj.due_on:
+                    row["detail"] += f" · Devolución prevista: {obj.due_on:%d/%m/%Y}"
+                    if obj.loan_overdue:
+                        row["detail"] += " · Vencido"
             else:
                 item = getattr(obj, "offboarding_item", None)
                 row.update(action="Devolución registrada", person=(str(item.offboarding_record.received_by) if item else "Sin responsable registrado"),
@@ -65,4 +70,5 @@ def asset_timeline(request, asset, admin_site):
     current = assignments.filter(status="ACTIVE").select_related("employee").first()
     return {"rows": rows, "page": page, "can_assignments": can_assignments,
             "can_maintenance": can_maintenance, "custodian": current.employee.full_name if current else None,
+            "current_loan": current if current and current.due_on else None,
             "missing_return_dates": assignments.filter(status="RETURNED", returned_at__isnull=True).count()}
