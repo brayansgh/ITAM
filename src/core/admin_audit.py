@@ -4,7 +4,7 @@ from django.contrib.auth import get_permission_codename, get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.db.migrations.recorder import MigrationRecorder
 from django.http import Http404, HttpResponseRedirect
 from django.template.response import TemplateResponse
@@ -87,10 +87,22 @@ class StandardHistoryAdmin(SimpleHistoryAdmin):
             if not any(request.user.has_perm(f"{opts.app_label}.{get_permission_codename(action, opts)}")
                        for action in ("view", "change")):
                 continue
-            stream = model.history.filter(**{field_name + "_id": object_id}).select_related("history_user").order_by("-history_date", "-history_id")
+            history = model.history.all()
+            stream = history.filter(**{field_name + "_id": object_id})
             related_count += stream.count()
-            for record in stream[:self.audit_page_size]:
-                row = version_row(record, record.prev_record)
+            entity_id = opts.pk.attname
+            # Igual que prev_record, buscar una fecha estrictamente anterior de la misma entidad.
+            previous = history.filter(
+                **{entity_id: OuterRef(entity_id)}, history_date__lt=OuterRef("history_date"),
+            ).order_by("-history_date").values("pk")[:1]
+            batch = list(stream.select_related("history_user").annotate(
+                previous_history_id=Subquery(previous),
+            ).order_by("-history_date", "-history_id")[:self.audit_page_size])
+            versions = {record.pk: record for record in batch}
+            missing_ids = {record.previous_history_id for record in batch if record.previous_history_id is not None}
+            versions.update(history.in_bulk(missing_ids - versions.keys()))
+            for record in batch:
+                row = version_row(record, versions.get(record.previous_history_id))
                 row["entity"] = f"{model._meta.verbose_name}: {record.instance.pk}"
                 related.append(row)
         related.sort(key=lambda row: row["date"], reverse=True)

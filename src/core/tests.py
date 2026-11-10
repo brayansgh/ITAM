@@ -1,5 +1,5 @@
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import Mock
 
@@ -8,9 +8,11 @@ from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.base import ContentFile
-from django.db import transaction
+from django.db import connection, transaction
 from django.test import RequestFactory, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import User
 from assignments.models import Assignment, AssignmentStatus, OffboardingRecord, OffboardingRecordItem
@@ -233,6 +235,30 @@ class CrossModuleAuditTests(TestCase):
         response = self.client.get(reverse("admin:inventory_category_history", args=[self.category.pk]), {"page": 2})
         self.assertEqual(len(response.context["audit_rows"]), 3)
         self.assertEqual(response.context["audit_counts"]["total"], 53)
+
+    def test_related_history_batches_predecessors_and_uses_strictly_earlier_dates(self):
+        specs = AssetSpecs.objects.create(asset=self.asset, ram="2 GB")
+        start = timezone.now()
+        for index in range(52):
+            specs.ram = f"{index + 3} GB"
+            specs._history_date = start + timedelta(seconds=min(index, 50))
+            specs.save()
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.history(self.asset)
+
+        related_queries = [
+            query for query in queries.captured_queries
+            if 'FROM "inventory_historicalassetspecs"' in query["sql"]
+        ]
+        self.assertEqual(len(related_queries), 3)
+        rows = response.context["related_rows"]
+        self.assertEqual(len(rows), 50)
+        self.assertEqual(response.context["related_count"], 53)
+        self.assertEqual(rows[0]["changes"][0]["old"], "52 GB")
+        self.assertEqual(rows[1]["changes"][0]["old"], "52 GB")
+        self.assertEqual(rows[-1]["changes"][0]["old"], "4 GB")
+        self.assertEqual(rows[-1]["changes"][0]["new"], "5 GB")
 
     def test_first_modification_does_not_invent_a_previous_state(self):
         self.company.history.all().delete()  # Solo la base temporal de esta prueba.

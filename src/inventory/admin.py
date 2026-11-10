@@ -331,8 +331,6 @@ class AssetAdmin(StandardHistoryAdmin):
         js = ('js/hide_change_reason.js',)
 
 # --- SEPARACIÓN DEL CEMENTERIO DE ACTIVOS ---
-from django.apps import apps
-
 if Asset in admin.site._registry:
     OriginalAssetAdmin = type(admin.site._registry[Asset])
     admin.site.unregister(Asset)

@@ -61,7 +61,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
 
             if (context['employee_detail'] and obj.status == EmployeeStatus.ACTIVE
                     and self.can_process_offboarding(request, obj)
-                    and context['can_employee_custody'] and context['employee_custody'].exists()):
+                    and context['can_employee_custody'] and context['employee_custody']):
                 context['active_return_url'] = reverse('admin:employees_employee_return_assets', args=[obj.pk])
         return super().render_change_form(request, context, add, change, form_url, obj)
 

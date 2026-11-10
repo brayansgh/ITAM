@@ -45,7 +45,7 @@ def sync_maintenance_to_inventory(sender, instance, using, signal, **kwargs):
 
 
 from django.core.exceptions import ValidationError
-from django.db.models.signals import pre_delete, pre_save
+from django.db.models.signals import pre_delete
 from inventory.models import AssetSpecs, AssetNetwork, AssetWarranty, DecommissionedAsset
 from .models import MaintenanceDocument
 from .closure import CLOSED_STATUSES

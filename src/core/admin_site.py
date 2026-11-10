@@ -180,6 +180,11 @@ class ITAMAdminSite(AdminSite):
                 for model in models:
                     ma = self._registry[model]
                     qs, duplicates = ma.get_search_results(request, self.visible_queryset(request, model), term)
+                    if model in (Employee, RetiredEmployee):
+                        qs = qs.select_related('company')
+                    if model is RetiredEmployee:
+                        # La búsqueda muestra el nombre y estado, sin actas de desvinculación.
+                        qs = qs.prefetch_related(None)
                     if duplicates:
                         qs = qs.distinct()
                     for obj in qs[:20]:

@@ -512,7 +512,7 @@ div#id_groups input {
   gap: 6px;
 }
 
-a.itam-table-action {
+:is(a, button).itam-table-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -529,7 +529,12 @@ a.itam-table-action {
   white-space: nowrap;
 }
 
-a.itam-table-action::after {
+button.itam-table-action {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+:is(a, button).itam-table-action::after {
   width: 5px;
   height: 5px;
   border-block-start: 1.5px solid currentColor;
@@ -538,8 +543,8 @@ a.itam-table-action::after {
   content: "";
 }
 
-a.itam-table-action:hover,
-a.itam-table-action:focus-visible {
+:is(a, button).itam-table-action:hover,
+:is(a, button).itam-table-action:focus-visible {
   border-color: var(--accent);
   background: var(--selected-row);
   color: var(--link-fg);

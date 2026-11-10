@@ -3,9 +3,11 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.template.loader import render_to_string
-from django.test import SimpleTestCase, TestCase, TransactionTestCase
+from django.test import Client, SimpleTestCase, TestCase, TransactionTestCase
 
 from accounts.models import User
 from organizations.models import Company
@@ -17,6 +19,7 @@ from django.contrib.admin.sites import AdminSite
 from django.test import RequestFactory
 from accounts.models import Role
 from assignments.admin import AssignmentAdmin
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.core.files.base import ContentFile
 from django.test import override_settings
@@ -397,6 +400,27 @@ class AssignmentAdminPermissionsTests(TestCase):
 
         return request
 
+    def test_changelist_loads_employee_company_and_actor_with_assignments(self):
+        user = User.objects.create_superuser(username="actor_sintetico", first_name="Responsable")
+        company = Company.objects.create(name="Compañía de prueba", code="TEST")
+        category = Category.objects.create(name="Tipo de prueba")
+        employee = Employee.objects.create(company=company, full_name="Custodio de prueba")
+        for index in range(3):
+            asset = Asset.objects.create(company=company, category=category, asset_tag=f"T-{index}")
+            create_assignment(
+                asset_id=asset.pk, employee_id=employee.pk, assigned_by=user, initial_condition="Operativo",
+            )
+        self.client.force_login(user)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("admin:assignments_assignment_changelist"))
+
+        self.assertContains(response, "Custodio de prueba (TEST)", count=3)
+        self.assertContains(response, "Responsable")
+        for table in ("employees_employee", "accounts_user", "organizations_company"):
+            lookups = [query for query in queries.captured_queries if f'FROM "{table}"' in query["sql"]]
+            self.assertLessEqual(len(lookups), 1, table)
+
     def test_administrator_permissions(self):
         request = self.create_request(Role.ADMINISTRATOR)
 
@@ -538,6 +562,86 @@ class AssignmentPDFPermissionsTests(
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 404)
+
+class EmployeeSummaryActTests(AssignmentPDFTestData, TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.client = Client(enforce_csrf_checks=True)
+        self.summary_url = reverse("admin:assignments_employeeassetsummary_changelist")
+        self.generate_url = reverse("admin:generate_summary_pdf", args=[self.employee.pk])
+        self.view_permission = Permission.objects.get(
+            content_type__app_label="assignments", codename="view_employeeassetsummary",
+        )
+        self.technician.user_permissions.add(self.view_permission)
+
+    def assert_no_act_generated(self):
+        self.assignment.refresh_from_db()
+        self.assertFalse(self.assignment.signed_act_pdf)
+        self.assertEqual(self.assignment.history.count(), 1)
+
+    def test_get_is_rejected_without_generating_an_act(self):
+        self.client.force_login(self.technician)
+
+        response = self.client.get(self.generate_url)
+
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.headers["Allow"], "POST")
+        self.assert_no_act_generated()
+
+    def test_post_requires_csrf(self):
+        self.client.force_login(self.technician)
+
+        response = self.client.post(self.generate_url)
+
+        self.assertEqual(response.status_code, 403)
+        self.assert_no_act_generated()
+
+    def test_valid_csrf_does_not_replace_role_and_view_permission_checks(self):
+        consultation = self.create_user(Role.CONSULTATION)
+        consultation.user_permissions.add(self.view_permission)
+        technician_without_permission = self.create_user(Role.TECHNOLOGY)
+        for user in (consultation, technician_without_permission):
+            with self.subTest(role=user.role):
+                self.client.force_login(user)
+                token = self.client.get(reverse("admin:itam_form_token")).json()["csrfToken"]
+
+                response = self.client.post(self.generate_url, {"csrfmiddlewaretoken": token})
+
+                self.assertEqual(response.status_code, 403)
+                self.assert_no_act_generated()
+
+        self.client.force_login(consultation)
+        self.assertNotContains(self.client.get(self.summary_url), "Generar y ver acta")
+
+    def test_list_submits_a_csrf_protected_post_and_opens_the_protected_pdf(self):
+        import re
+
+        self.client.force_login(self.technician)
+        page = self.client.get(self.summary_url)
+        self.assertContains(page, f'formaction="{self.generate_url}" formtarget="_blank"')
+        changelist = re.search(rb'<form id="changelist-form"[^>]*>(.*?)</form>', page.content, re.S)
+        self.assertIsNotNone(changelist)
+        self.assertIn(b'method="post"', changelist[0])
+        self.assertIn(self.generate_url.encode(), changelist[1])
+        token = re.search(rb'name="csrfmiddlewaretoken" value="([^"]+)"', changelist[1])
+        self.assertIsNotNone(token)
+
+        with tempfile.TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
+            response = self.client.post(self.generate_url, {"csrfmiddlewaretoken": token[1].decode()})
+            self.assertRedirects(response, self.url, fetch_redirect_response=False)
+            pdf = self.client.get(self.url)
+            self.addCleanup(pdf.close)
+            self.assertEqual(pdf.status_code, 200)
+            self.assertEqual(pdf.headers["Content-Type"], "application/pdf")
+            self.assertTrue(b"".join(pdf.streaming_content).startswith(b"%PDF-"))
+            pdf.close()
+
+        self.assignment.refresh_from_db()
+        self.assertTrue(self.assignment.signed_act_pdf)
+        self.assertEqual(self.assignment.history.first().history_user, self.technician)
+        self.assertEqual(self.assignment.history.count(), 2)
+
 
 class AssignmentPDFDownloadTests(
     AssignmentPDFTestData,

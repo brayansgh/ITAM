@@ -6,7 +6,7 @@ from django.contrib.admin.helpers import AdminForm
 from django.contrib.admin.options import IS_POPUP_VAR
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
-from django.http import FileResponse, HttpResponseBadRequest, HttpResponseRedirect
+from django.http import FileResponse, HttpResponseBadRequest, HttpResponseNotAllowed, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
@@ -386,7 +386,11 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         })
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("offboarding_item__offboarding_record")
+        qs = super().get_queryset(request).select_related("offboarding_item__offboarding_record")
+        if getattr(getattr(request, "resolver_match", None), "url_name", None) == "assignments_assignment_changelist":
+            # Django omite la precarga automática cuando el queryset ya incluye relaciones.
+            qs = qs.select_related("employee__company", "assigned_by")
+        return qs
 
     def get_list_display(self, request):
         return tuple(self.pdf_column(request) if field == "download_pdf" else field
@@ -509,17 +513,10 @@ class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
         return False
 
     def get_queryset(self, request):
-        qs = super().get_queryset(request)
-
         return (
-            qs.annotate(
-                active_count=Count(
-                    "assignments",
-                    filter=Q(
-                        assignments__status=AssignmentStatus.ACTIVE
-                    ),
-                )
-            ).filter(active_count__gt=0)
+            super().get_queryset(request)
+            .filter(assignments__status=AssignmentStatus.ACTIVE)
+            .annotate(active_count=Count("assignments"))
         )
 
     @admin.display(
@@ -540,7 +537,8 @@ class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
         )
 
         return format_html(
-            '<a class="itam-table-action" href="{}" target="_blank" rel="noopener">Generar y ver acta</a>',
+            '<button class="itam-table-action" type="submit" formaction="{}" formtarget="_blank">'
+            'Generar y ver acta</button>',
             url,
         )
 
@@ -559,12 +557,7 @@ class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
 
         return custom_urls + urls
 
-    def generate_employee_pdf_view(
-        self,
-        request,
-        object_id,
-    ):
-               
+    def generate_employee_pdf_view(self, request, object_id):
         if not (
             self.has_view_permission(request)
             and request.user.is_active
@@ -578,6 +571,9 @@ class EmployeeAssetSummaryAdmin(StandardHistoryAdmin):
             )
         ):
             raise PermissionDenied
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+
         emp = self.get_object(request, object_id)
 
         if not emp:
