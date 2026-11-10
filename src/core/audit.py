@@ -105,7 +105,7 @@ def version_row(record, previous, relations_since=None):
         detail = "Sin cambios en los campos auditables."
     return {
         "date": record.history_date,
-        "actor": record.history_user.get_username() if record.history_user else "Sin responsable registrado",
+        "actor": record.history_user.get_display_name() if record.history_user else "Sin responsable registrado",
         "action": ACTION_LABELS[record.history_type],
         "code": record.history_type,
         "changes": changes,

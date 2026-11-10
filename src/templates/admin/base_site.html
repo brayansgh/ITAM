@@ -3,7 +3,7 @@
 {% block dark-mode-vars %}<script src="{% static 'itam/theme.js' %}?v=20261108-2"></script>{% endblock %}
 {% block extrastyle %}{{ block.super }}
 <link rel="stylesheet" href="{% static 'itam/theme.css' %}?v=20261108-2">
-<link rel="stylesheet" href="{% static 'itam/admin.css' %}?v=20261109-14">{% endblock %}
+<link rel="stylesheet" href="{% static 'itam/admin.css' %}?v=20261109-17">{% endblock %}
 {% block extrahead %}{{ block.super }}{% if has_permission %}
 <meta name="itam-form-token-url" content="{% url 'admin:itam_form_token' %}">{% endif %}
 <link rel="icon" type="image/png" href="{% static 'img/palma-cabecera.png' %}">

@@ -1,3 +1,4 @@
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.contrib import admin
@@ -94,6 +95,91 @@ class OffboardingAuthorizationTests(TestCase):
         self.assertEqual(self.asset.status, AssetStatus.ASSIGNED)
         self.assertFalse(OffboardingRecord.objects.exists())
         self.assertFalse(OffboardingRecordItem.objects.exists())
+
+    def test_retirement_without_custody_generates_distinct_act_in_retired_list(self):
+        from assignments.models import ReturnReason
+
+        employee = Employee.objects.create(company=self.employee.company, full_name="Persona sin custodia")
+        ordinary = OffboardingRecord.objects.create(
+            employee=employee, received_by=self.operator, return_reason=ReturnReason.DAMAGE,
+            pdf="devolucion-sintetica.pdf",
+        )
+        self.client.force_login(self.operator)
+        url = reverse("admin:employees_employee_change", args=[employee.pk])
+        data = {"full_name": employee.full_name, "company": employee.company_id, "document_type": "CC",
+                "status": EmployeeStatus.RETIRO, "_save": "Guardar"}
+        with patch("inventory.offboarding_pdf.generate_and_save_offboarding_pdf", side_effect=OSError):
+            failed = self.client.post(url, data, follow=True)
+        self.assertContains(failed, "El retiro no se registró.")
+        employee.refresh_from_db()
+        self.assertEqual(employee.status, EmployeeStatus.ACTIVE)
+        self.assertFalse(employee.offboarding_records.filter(return_reason="").exists())
+
+        with TemporaryDirectory() as media, self.settings(MEDIA_ROOT=media):
+            response = self.client.post(url, data)
+            record = employee.offboarding_records.get(return_reason="")
+            self.assertTrue(record.pdf)
+            self.assertIn("Acta_Desvinculacion_", record.pdf.name)
+            self.assertFalse(record.items.exists())
+            receipt_url = reverse("admin:assignments_offboardingrecord_receipt", args=[record.pk])
+            self.assertRedirects(response, receipt_url)
+            self.assertContains(self.client.get(receipt_url), "Resumen de desvinculación")
+            retired = self.client.get(reverse("admin:employees_retiredemployee_changelist"))
+            self.assertEqual(retired.context["title"], "Empleados retirados")
+            self.assertContains(retired, "Actas de desvinculación")
+            self.assertContains(retired, receipt_url)
+            self.assertNotContains(retired, reverse("admin:assignments_offboardingrecord_receipt", args=[ordinary.pk]))
+            self.assertNotContains(retired, "Historial de devoluciones")
+
+    def test_profile_starts_retirement_and_continues_to_asset_reception(self):
+        self.employee.status = EmployeeStatus.ACTIVE
+        self.employee.save(update_fields=["status"])
+        profile = reverse("admin:employees_employee_change", args=[self.employee.pk])
+        start = reverse("admin:employees_employee_start_offboarding", args=[self.employee.pk])
+
+        reader = self.user(Role.CONSULTATION, True)
+        self.client.force_login(reader)
+        self.assertNotContains(self.client.get(profile), start)
+        self.assertEqual(self.client.post(start).status_code, 403)
+
+        support = support_operator(self.operator)
+        self.client.force_login(support)
+        self.assertContains(self.client.get(profile), f'<a href="{start}">Desvinculación</a>', html=True)
+        self.assertContains(self.client.get(start), "Confirmar desvinculación")
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
+
+        self.assertRedirects(self.client.post(start), self.url)
+        self.employee.refresh_from_db()
+        self.assignment.refresh_from_db()
+        self.assertEqual(self.employee.status, EmployeeStatus.RETIRO)
+        self.assertEqual(self.employee.history.first().history_user, support)
+        self.assertEqual(self.assignment.status, AssignmentStatus.ACTIVE)
+        self.assertFalse(self.employee.offboarding_records.exists())
+        with TemporaryDirectory() as media, self.settings(MEDIA_ROOT=media):
+            response = self.client.post(self.url, self.data)
+            record = self.employee.offboarding_records.get()
+            self.assertTrue(record.pdf)
+            self.assertRedirects(response, reverse("admin:assignments_offboardingrecord_receipt", args=[record.pk]))
+
+    def test_profile_retirement_without_custody_rolls_back_if_pdf_fails(self):
+        employee = Employee.objects.create(company=self.employee.company, full_name="Persona sin activos")
+        start = reverse("admin:employees_employee_start_offboarding", args=[employee.pk])
+        self.client.force_login(self.operator)
+        with patch("inventory.offboarding_pdf.generate_and_save_offboarding_pdf", side_effect=OSError):
+            response = self.client.post(start, follow=True)
+        self.assertContains(response, "El retiro no se registró")
+        employee.refresh_from_db()
+        self.assertEqual(employee.status, EmployeeStatus.ACTIVE)
+        self.assertFalse(employee.offboarding_records.exists())
+
+        with TemporaryDirectory() as media, self.settings(MEDIA_ROOT=media):
+            response = self.client.post(start)
+            record = employee.offboarding_records.get()
+            self.assertTrue(record.pdf)
+            self.assertRedirects(response, reverse("admin:assignments_offboardingrecord_receipt", args=[record.pk]))
+            self.assertEqual(self.client.post(start).status_code, 404)
+            self.assertEqual(employee.offboarding_records.count(), 1)
 
     def test_superuser_exception_is_preserved(self):
         self.client.force_login(self.operator)

@@ -171,7 +171,10 @@ class ITAMAdminSite(AdminSite):
         from employees.models import Employee, RetiredEmployee
         term = request.GET.get('q', '').strip()[:150]
         results = []
-        for label, models in [('Activos', (Asset, DecommissionedAsset)), ('Empleados', (Employee, RetiredEmployee))]:
+        for label, action, models in (
+            ('Activos', 'Ver activo', (Asset, DecommissionedAsset)),
+            ('Empleados', 'Ver empleado', (Employee, RetiredEmployee)),
+        ):
             rows = []
             if term:
                 for model in models:
@@ -181,17 +184,21 @@ class ITAMAdminSite(AdminSite):
                         qs = qs.distinct()
                     for obj in qs[:20]:
                         if ma.has_view_permission(request, obj):
-                            rows.append({'label': str(obj), 'url': reverse(f'admin:{model._meta.app_label}_{model._meta.model_name}_change', args=[obj.pk])})
-            results.append({'label': label, 'rows': rows})
+                            rows.append({
+                                'label': str(obj),
+                                'status': obj.get_status_display(),
+                                'url': reverse(f'admin:{model._meta.app_label}_{model._meta.model_name}_change', args=[obj.pk]),
+                            })
+            results.append({'label': label, 'action': action, 'rows': rows})
         return self.page(request, 'admin/itam/search.html', 'Resultados de búsqueda', query=term, results=results)
 
     def documents(self, request):
         from assignments.models import Assignment, OffboardingRecord
         from maintenance.models import MaintenanceDocument, MaintenanceRecord, MaintenanceType
         kind = request.GET.get('tipo', 'entrega')
-        if kind not in ('entrega', 'devolucion', 'mantenimiento', 'baja'):
+        if kind not in ('entrega', 'devolucion', 'desvinculacion', 'mantenimiento', 'baja'):
             kind = 'entrega'
-        config = {'entrega': (Assignment, 'signed_act_pdf'), 'devolucion': (OffboardingRecord, 'pdf'), 'mantenimiento': (MaintenanceRecord, None), 'baja': (MaintenanceRecord, None)}
+        config = {'entrega': (Assignment, 'signed_act_pdf'), 'devolucion': (OffboardingRecord, 'pdf'), 'desvinculacion': (OffboardingRecord, 'pdf'), 'mantenimiento': (MaintenanceRecord, None), 'baja': (MaintenanceRecord, None)}
         model, field = config[kind]
         ma = self._registry[model]
         if not ma.has_view_permission(request) or not ma.has_module_permission(request):
@@ -204,6 +211,10 @@ class ITAMAdminSite(AdminSite):
                         return redirect(reverse('admin:itam_documents') + '?tipo=' + key)
             raise PermissionDenied
         qs = self.visible_queryset(request, model)
+        if kind == 'devolucion':
+            qs = qs.exclude(return_reason='')
+        elif kind == 'desvinculacion':
+            qs = qs.filter(return_reason='')
         if field:
             qs = qs.exclude(**{field: ''}).exclude(**{field + '__isnull': True}).select_related(
                 *(['asset', 'employee'] if kind == 'entrega' else ['employee'])
@@ -231,17 +242,17 @@ class ITAMAdminSite(AdminSite):
                 continue
             if kind == 'entrega':
                 url, label = reverse('download_act_pdf', args=[obj.pk]), str(obj.asset)
-            elif kind == 'devolucion':
+            elif kind in ('devolucion', 'desvinculacion'):
                 url, label = reverse('admin:assignments_offboardingrecord_view_pdf', args=[obj.pk]), str(obj.employee)
             else:
                 url, label = reverse('admin:maintenance_document_download', args=[obj.pk]), str(obj.maintenance.asset)
             detail_url = (reverse('admin:assignments_offboardingrecord_receipt', args=[obj.pk])
-                          if kind == 'devolucion' else None)
+                          if kind in ('devolucion', 'desvinculacion') else None)
             rows.append({'date': record.created_at, 'label': label, 'url': url, 'detail_url': detail_url,
-                         'document_type': {'entrega': 'Entrega', 'devolucion': 'Devolución',
+                         'document_type': {'entrega': 'Entrega', 'devolucion': 'Devolución', 'desvinculacion': 'Desvinculación',
                                            'mantenimiento': 'Mantenimiento', 'baja': 'Baja'}[kind],
                          'employee': obj.employee.full_name if field else 'No aplica'})
-        tabs = [{'label': label, 'url': '?tipo=' + key, 'active': key == kind} for key, label in [('entrega', 'Entrega'), ('devolucion', 'Devolución'), ('mantenimiento', 'Mantenimiento'), ('baja', 'Bajas')] if self._registry[config[key][0]].has_view_permission(request) and self._registry[config[key][0]].has_module_permission(request)]
+        tabs = [{'label': label, 'url': '?tipo=' + key, 'active': key == kind} for key, label in [('entrega', 'Entrega'), ('devolucion', 'Devolución'), ('desvinculacion', 'Desvinculación'), ('mantenimiento', 'Mantenimiento'), ('baja', 'Bajas')] if self._registry[config[key][0]].has_view_permission(request) and self._registry[config[key][0]].has_module_permission(request)]
         return self.page(request, 'admin/itam/documents.html', 'Documentos y actas', rows=rows, tabs=tabs, page=page, kind=kind)
 
     def decommission_add(self, request):

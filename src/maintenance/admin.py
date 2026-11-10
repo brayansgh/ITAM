@@ -122,13 +122,9 @@ class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         route = getattr(getattr(request, "resolver_match", None), "url_name", "")
         return route == "maintenance_decommission_add" or request.GET.get("type") == MaintenanceType.DECOMMISSION
 
-    @staticmethod
-    def user_name(user):
-        return user.get_full_name() or user.get_username()
-
     @admin.display(description="Reportado por", ordering="reported_by__first_name")
     def reporter_name(self, obj):
-        return self.user_name(obj.reported_by)
+        return obj.reported_by.get_display_name()
 
     def get_readonly_fields(self, request, obj=None):
         fields = super().get_readonly_fields(request, obj)
@@ -256,8 +252,6 @@ class MaintenanceRecordAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
-        if "reported_by" in form.base_fields:
-            form.base_fields["reported_by"].label_from_instance = self.user_name
         for name in ("asset", "reported_by"):
             field = form.base_fields.get(name)
             if field is not None and isinstance(field.widget, RelatedFieldWidgetWrapper):

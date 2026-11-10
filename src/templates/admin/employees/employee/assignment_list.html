@@ -1,0 +1,19 @@
+{% if assignments %}
+    <ul class="itam-employee-records">
+        {% for assignment in assignments %}
+            <li class="itam-employee-record">
+                <div class="itam-employee-record-info">
+                    <strong>{{ assignment.asset }}</strong>
+                    <span class="itam-label{% if assignment.status == 'ACTIVE' %} itam-status-success{% endif %}">{{ assignment.get_status_display }}</span>
+                    <p>Entrega · {{ assignment.assigned_at|date:"d/m/Y H:i:s T" }}</p>
+                    {% if show_return and assignment.returned_at %}
+                        <p>Devolución · {{ assignment.returned_at|date:"d/m/Y H:i:s T" }}</p>
+                    {% endif %}
+                </div>
+                <a class="itam-table-action" href="{% url 'admin:assignments_assignment_change' assignment.pk %}">Ver asignación</a>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p class="itam-notice">{{ empty_text }}</p>
+{% endif %}

@@ -16,4 +16,4 @@ class User(AbstractUser):
         return self.get_full_name() or self.get_username()
 
     def __str__(self):
-        return f"{self.username} - {self.get_role_display()}"
+        return self.get_display_name()

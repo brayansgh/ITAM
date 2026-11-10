@@ -151,7 +151,7 @@ class CorporateAdminTests(TestCase):
         self.assertContains(response, 'Sin módulos disponibles')
 
     def test_documents_identify_type_employee_and_keep_protected_links(self):
-        from assignments.models import OffboardingRecord
+        from assignments.models import OffboardingRecord, ReturnReason
         from assignments.services import create_assignment
         from maintenance.models import MaintenanceDocument
         assignment = create_assignment(asset_id=self.asset.pk, employee_id=self.employee.pk,
@@ -159,13 +159,16 @@ class CorporateAdminTests(TestCase):
         assignment.signed_act_pdf = 'actas/synthetic.pdf'
         assignment.save(update_fields=['signed_act_pdf'])
         returned = OffboardingRecord.objects.create(employee=self.employee, received_by=self.user,
-                                                     pdf='actas_desvinculacion/synthetic.pdf')
+                                                     return_reason=ReturnReason.DAMAGE, pdf='actas_desvinculacion/synthetic.pdf')
+        retired = OffboardingRecord.objects.create(employee=self.employee, received_by=self.user,
+                                                    pdf='actas_desvinculacion/synthetic-retired.pdf')
         ticket = MaintenanceRecord.objects.create(asset=self.asset, type=MaintenanceType.PREVENTIVE,
                                                   reported_by=self.user, description='Prueba documental')
         document = MaintenanceDocument.objects.create(maintenance=ticket, document='maintenance_docs/synthetic.pdf')
         for kind, label, employee, url in [
             ('entrega', 'Entrega', self.employee.full_name, reverse('download_act_pdf', args=[assignment.pk])),
             ('devolucion', 'Devolución', self.employee.full_name, reverse('admin:assignments_offboardingrecord_view_pdf', args=[returned.pk])),
+            ('desvinculacion', 'Desvinculación', self.employee.full_name, reverse('admin:assignments_offboardingrecord_view_pdf', args=[retired.pk])),
             ('mantenimiento', 'Mantenimiento', 'No aplica', reverse('admin:maintenance_document_download', args=[document.pk])),
         ]:
             with self.subTest(kind=kind):
@@ -254,6 +257,8 @@ class CorporateAdminTests(TestCase):
             response = self.client.get(reverse('admin:itam_search'), {'q': term})
             self.assertEqual(response.status_code, 200)
             self.assertTrue(any(group['rows'] for group in response.context['results']))
+            self.assertContains(response, 'itam-search-result')
+            self.assertContains(response, 'Ver empleado' if term == 'Persona sintética' else 'Ver activo')
 
     def test_global_search_does_not_leak_records_without_module_permission(self):
         user = User.objects.create_user(username='restricted', is_staff=True, role='OTHER')

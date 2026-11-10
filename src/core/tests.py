@@ -97,6 +97,9 @@ class CrossModuleAuditTests(TestCase):
         self.assertContains(self.history(self.asset), 'id="audit-related"')
 
     def test_profile_admin_records_actor_and_exactly_one_admin_event(self):
+        self.actor.first_name = "Lucía"
+        self.actor.last_name = "García"
+        self.actor.save(update_fields=["first_name", "last_name"])
         url = reverse("admin:inventory_category_change", args=[self.category.pk])
         response = self.client.post(url, {"name": "Categoría nueva", "description": "Actualizada"})
         self.assertEqual(response.status_code, 302)
@@ -106,6 +109,9 @@ class CrossModuleAuditTests(TestCase):
         self.assertEqual(response.context["admin_events"].paginator.count, 1)
         self.assertContains(response, "Categoría auditada")
         self.assertContains(response, "Categoría nueva")
+        self.assertEqual(response.context["audit_rows"][0]["actor"], "Lucía García")
+        self.assertContains(response, "<td>Lucía García</td>", html=True)
+        self.assertNotContains(response, "<td>audit_operator</td>", html=True)
 
     def test_asset_admin_does_not_double_log(self):
         request = RequestFactory().post("/")

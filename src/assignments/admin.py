@@ -247,6 +247,7 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
             .order_by("signed_act_pdf", "history_date", "history_id").distinct("signed_act_pdf")
             .values("history_date", "history_id", "history_change_reason")
         )
+        return_pdf_url = self.return_pdf_url(request, assignment)
         return render(request, "assignments/act_confirmation.html", {
             **self.admin_site.each_context(request),
             "title": "Actas de asignación",
@@ -254,7 +255,8 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
             "delivery_assets": [asset_link(request, assignment.asset, self.admin_site)],
             "show_selector": can_generate and request.GET.get("confirmada") == "1",
             "can_generate": can_generate,
-            "return_pdf_url": self.return_pdf_url(request, assignment),
+            "return_pdf_url": return_pdf_url,
+            "return_document_title": assignment.offboarding_item.offboarding_record.document_title if return_pdf_url else None,
             "previous_acts": sorted(previous_acts, key=lambda entry: entry["history_date"], reverse=True),
         })
 
@@ -324,7 +326,7 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         links = []
         return_url = self.return_pdf_url(request, obj)
         if return_url:
-            links.append((return_url, "Acta de devolución"))
+            links.append((return_url, obj.offboarding_item.offboarding_record.document_title))
         if self.can_generate_delivery_act(request, obj):
             links.append((
                 reverse("admin:assignments_assignment_act", args=[obj.pk]), "Gestionar acta",
@@ -524,6 +526,7 @@ class OffboardingRecordAdmin(StandardHistoryAdmin):
 
     list_display = (
         "employee",
+        "document_kind",
         "receipt_date",
         "received_by",
         "view_pdf",
@@ -562,11 +565,21 @@ class OffboardingRecordAdmin(StandardHistoryAdmin):
     inlines = [OffboardingRecordItemInline]
     audit_related_models = ((OffboardingRecordItem, "offboarding_record"),)
 
+    def changelist_view(self, request, extra_context=None):
+        return super().changelist_view(request, {**(extra_context or {}), "title": "Actas de devolución y desvinculación"})
+
+    @admin.display(description="Tipo de acta")
+    def document_kind(self, obj):
+        return obj.document_title
+
     @admin.display(description="Fecha de registro", ordering="created_at")
     def receipt_date(self, obj):
         return obj.created_at
 
     def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):
@@ -589,6 +602,7 @@ class OffboardingRecordAdmin(StandardHistoryAdmin):
         )
 
     def render_change_form(self, request, context, add=False, change=False, form_url='', obj=None):
+        context["title"] = f"Consultar {obj.document_title.lower()}" if obj else "Consultar acta"
         if obj and obj.return_reason:
             from maintenance.models import MaintenanceRecord
 
@@ -652,7 +666,8 @@ class OffboardingRecordAdmin(StandardHistoryAdmin):
         if open_pdf:
             request.session.pop("itam_new_return_pdf")
         return render(request, "admin/assignments/offboardingrecord/receipt.html", {
-            **self.admin_site.each_context(request), "title": "Resumen de devolución",
+            **self.admin_site.each_context(request),
+            "title": "Resumen de devolución" if record.return_reason else "Resumen de desvinculación",
             "record": record, "items": record.items.select_related("assignment__asset"),
             "open_pdf": open_pdf, "can_manage_record": self.has_view_permission(request, record),
         })

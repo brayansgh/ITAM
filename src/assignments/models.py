@@ -173,6 +173,10 @@ class OffboardingRecord(BaseModel):
         verbose_name_plural = "Actas de devolución"
         ordering = ["-created_at"]
 
+    @property
+    def document_title(self):
+        return "Acta de devolución" if self.return_reason else "Acta de desvinculación"
+
     def __str__(self):
         return f"Acta de {self.employee.full_name} - {self.created_at:%d/%m/%Y}"
 

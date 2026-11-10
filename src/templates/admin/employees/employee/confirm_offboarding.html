@@ -1,0 +1,26 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<section class="itam-panel" aria-labelledby="offboarding-employee">
+    <div class="itam-page-heading">
+        <div>
+            <h2 id="offboarding-employee">{{ employee.full_name }}</h2>
+            <p>{{ employee.company }} · {{ employee.get_status_display }}</p>
+        </div>
+    </div>
+    <p class="itam-notice">
+        Al confirmar, el empleado quedará registrado como retirado.
+        {% if has_pending_assets %}
+            En el siguiente paso podrás registrar los activos que recibas y generar el acta.
+        {% else %}
+            El sistema emitirá el acta de desvinculación si el empleado sigue sin activos pendientes.
+        {% endif %}
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="submit-row">
+            <input type="submit" class="default" value="Confirmar desvinculación">
+            <a class="closelink" href="{% url 'admin:employees_employee_change' employee.pk %}">Cancelar</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

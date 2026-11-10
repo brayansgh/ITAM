@@ -2,7 +2,7 @@ from core.admin_audit import StandardHistoryAdmin
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html
@@ -46,6 +46,10 @@ class EmployeeAdmin(StandardHistoryAdmin):
             context['can_employee_custody'] = aa.has_view_permission(request)
             if context['employee_detail']:
                 context["employee_documents"] = self.employee_documents(request, obj, assignments, aa)
+                if self.can_process_offboarding(request, obj):
+                    route = ("employees_employee_process_offboarding" if obj.status == EmployeeStatus.RETIRO
+                             else "employees_employee_start_offboarding")
+                    context["employee_offboarding_url"] = reverse(f"admin:{route}", args=[obj.pk])
                 if self.has_view_history_or_change_history_permission(request, obj):
                     context['employee_history_url'] = reverse('admin:employees_employee_history', args=[obj.pk])
                 if (obj.status != EmployeeStatus.RETIRO
@@ -61,6 +65,62 @@ class EmployeeAdmin(StandardHistoryAdmin):
                 context['active_return_url'] = reverse('admin:employees_employee_return_assets', args=[obj.pk])
         return super().render_change_form(request, context, add, change, form_url, obj)
 
+    def save_model(self, request, obj, form, change):
+        previous_status = None
+        if change and obj.status == EmployeeStatus.RETIRO:
+            previous_status = (
+                Employee.objects.select_for_update().filter(pk=obj.pk)
+                .values_list("status", flat=True).first()
+            )
+        super().save_model(request, obj, form, change)
+        request.itam_new_retirement = (
+            obj.status == EmployeeStatus.RETIRO and previous_status != EmployeeStatus.RETIRO
+        )
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        if getattr(request, "itam_new_retirement", False):
+            self.issue_retirement_without_custody(request, form.instance)
+
+    def issue_retirement_without_custody(self, request, employee):
+        if employee.assignments.filter(status=AssignmentStatus.ACTIVE).exists():
+            return None
+        if not self.can_process_offboarding(request, employee):
+            raise PermissionDenied
+
+        from inventory.offboarding_pdf import generate_and_save_offboarding_pdf
+
+        record = OffboardingRecord(employee=employee, received_by=request.user)
+        record._history_user = request.user
+        record.save()
+        request.itam_retirement_record = record
+        try:
+            generate_and_save_offboarding_pdf(record)
+        except Exception as error:
+            raise ReturnPdfError from error
+        return record
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        try:
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        except ReturnPdfError:
+            discard_return_pdf(request.itam_retirement_record)
+            messages.error(request, "No se pudo generar el acta de desvinculación. El retiro no se registró.")
+            return redirect(request.get_full_path())
+        except Exception:
+            discard_return_pdf(getattr(request, "itam_retirement_record", None))
+            raise
+
+    def response_add(self, request, obj, post_url_continue=None):
+        if hasattr(request, "itam_retirement_record") and "_popup" not in request.POST:
+            return self.return_receipt_redirect(request, request.itam_retirement_record)
+        return super().response_add(request, obj, post_url_continue)
+
+    def response_change(self, request, obj):
+        if hasattr(request, "itam_retirement_record") and "_popup" not in request.POST:
+            return self.return_receipt_redirect(request, request.itam_retirement_record)
+        return super().response_change(request, obj)
+
     def employee_documents(self, request, employee, assignments, assignment_admin):
         documents = [
             {"label": f"Acta de entrega · {assignment.asset}", "date": assignment.assigned_at,
@@ -71,7 +131,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
         returns_admin = self.admin_site._registry[OffboardingRecord]
         for record in returns_admin.get_queryset(request).filter(employee=employee).select_related("employee").exclude(pdf="").exclude(pdf__isnull=True):
             if returns_admin.can_view_receipt(request, record):
-                documents.append({"label": "Acta de devolución", "date": record.created_at,
+                documents.append({"label": record.document_title, "date": record.created_at,
                                   "url": reverse("admin:assignments_offboardingrecord_view_pdf", args=[record.pk]),
                                   "receipt_url": reverse("admin:assignments_offboardingrecord_receipt", args=[record.pk])})
         return sorted(documents, key=lambda document: document["date"], reverse=True)
@@ -165,7 +225,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
         )
 
         return format_html(
-            '<a class="itam-table-action" href="{}">Procesar devolución</a>',
+            '<a class="itam-table-action" href="{}">Procesar desvinculación</a>',
             url,
         )
 
@@ -173,6 +233,8 @@ class EmployeeAdmin(StandardHistoryAdmin):
         urls = super().get_urls()
 
         custom_urls = [
+            path("<uuid:object_id>/desvincular/", self.admin_site.admin_view(self.start_offboarding_view),
+                 name="employees_employee_start_offboarding"),
             path("<uuid:object_id>/devolver/", self.admin_site.admin_view(self.return_assets_view),
                  name="employees_employee_return_assets"),
             path(
@@ -185,6 +247,53 @@ class EmployeeAdmin(StandardHistoryAdmin):
         ]
 
         return custom_urls + urls
+
+    def start_offboarding_view(self, request, object_id):
+        from django.http import HttpResponseNotAllowed
+
+        if request.method not in ("GET", "POST"):
+            return HttpResponseNotAllowed(["GET", "POST"])
+        if not self.can_process_offboarding(request):
+            raise PermissionDenied
+        employee = get_object_or_404(self.get_queryset(request), pk=object_id)
+        if not self.can_process_offboarding(request, employee):
+            raise PermissionDenied
+        process_url = reverse("admin:employees_employee_process_offboarding", args=[employee.pk])
+        if employee.status == EmployeeStatus.RETIRO:
+            return redirect(process_url)
+
+        if request.method == "POST":
+            try:
+                with transaction.atomic():
+                    employee = Employee.objects.select_for_update().get(pk=employee.pk)
+                    if not self.can_process_offboarding(request, employee):
+                        raise PermissionDenied
+                    if employee.status == EmployeeStatus.RETIRO:
+                        return redirect(process_url)
+                    employee.status = EmployeeStatus.RETIRO
+                    employee._history_user = request.user
+                    employee.save(update_fields=["status", "updated_at"])
+                    record = self.issue_retirement_without_custody(request, employee)
+                    self.log_change(request, employee, [{"changed": {"fields": ["Estado"]}}])
+            except ReturnPdfError:
+                discard_return_pdf(request.itam_retirement_record)
+                messages.error(request, "No se pudo generar el acta de desvinculación. El retiro no se registró.")
+                return redirect(request.path)
+            except Exception:
+                discard_return_pdf(getattr(request, "itam_retirement_record", None))
+                raise
+            if record:
+                return self.return_receipt_redirect(request, record)
+            messages.success(request, "Retiro registrado. Confirma los activos que recibas físicamente.")
+            return redirect(process_url)
+
+        return render(request, "admin/employees/employee/confirm_offboarding.html", {
+            **self.admin_site.each_context(request),
+            "title": "Desvinculación",
+            "opts": self.model._meta,
+            "employee": employee,
+            "has_pending_assets": employee.has_pending_assets,
+        })
 
     def return_assets_view(self, request, object_id):
         from maintenance.models import MaintenanceRecord
@@ -313,6 +422,10 @@ class EmployeeAdmin(StandardHistoryAdmin):
                                     "vigentes. Actualiza la página."
                                 )
 
+                            locked_employee = Employee.objects.select_for_update().get(pk=employee.pk)
+                            if locked_employee.status != EmployeeStatus.RETIRO:
+                                raise ValidationError("El empleado ya no figura como retirado. Actualiza la página.")
+
                             forms_by_id = {
                                 item_form.cleaned_data["assignment_id"]: item_form
                                 for item_form in selected_forms
@@ -396,7 +509,7 @@ class EmployeeAdmin(StandardHistoryAdmin):
             "formset": formset,
             "rows": rows,
             "title": (
-                f"Devolución de activos: "
+                f"Desvinculación: "
                 f"{employee.full_name}"
             ),
         }
@@ -419,7 +532,6 @@ class RetiredEmployeeAdmin(admin.ModelAdmin):
         "company",
         "site",
         "area",
-        "view_offboarding_records",
     )
 
     search_fields = (
@@ -453,6 +565,11 @@ class RetiredEmployeeAdmin(admin.ModelAdmin):
                 assignments__status=AssignmentStatus.ACTIVE
             )
             .distinct()
+            .prefetch_related(Prefetch(
+                "offboarding_records",
+                queryset=OffboardingRecord.objects.filter(return_reason="").exclude(pdf="").exclude(pdf__isnull=True),
+                to_attr="retirement_documents",
+            ))
         )
 
     def has_add_permission(self, request):
@@ -461,16 +578,31 @@ class RetiredEmployeeAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
-    @admin.display(description="Historial de devoluciones")
-    def view_offboarding_records(self, obj):
-        url = (
-            reverse(
-                "admin:assignments_offboardingrecord_changelist"
-            )
-            + f"?employee__id__exact={obj.pk}"
-        )
+    def changelist_view(self, request, extra_context=None):
+        return super().changelist_view(request, {**(extra_context or {}), "title": "Empleados retirados"})
 
-        return format_html(
-            '<a class="itam-table-action" href="{}">Ver actas</a>',
-            url,
-        )
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def get_list_display(self, request):
+        record_admin = self.admin_site.get_model_admin(OffboardingRecord)
+
+        @admin.display(description="Actas de desvinculación")
+        def documents(employee):
+            links = [
+                (reverse("admin:assignments_offboardingrecord_receipt", args=[record.pk]), record.created_at)
+                for record in employee.retirement_documents
+                if record_admin.can_view_receipt(request, record)
+            ]
+            if not links:
+                return "Sin actas disponibles"
+            from django.utils import timezone
+            from django.utils.html import format_html_join
+
+            actions = format_html_join(
+                "", '<a class="itam-table-action" href="{}">Acta de desvinculación · {}</a>',
+                ((url, timezone.localtime(date).strftime("%d/%m/%Y")) for url, date in links),
+            )
+            return format_html('<div class="itam-table-actions">{}</div>', actions)
+
+        return (*super().get_list_display(request), documents)

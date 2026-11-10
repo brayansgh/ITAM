@@ -21,7 +21,7 @@
             <span class="itam-label">{% if assignment.signed_act_pdf %}PDF disponible{% elif can_generate %}Acta pendiente{% else %}Acta de entrega no disponible{% endif %}</span>
         </div>
         <div class="itam-act-actions">
-            {% if return_pdf_url %}<a class="button itam-primary" href="{{ return_pdf_url }}" target="_blank" rel="noopener">Acta de devolución</a>{% endif %}
+            {% if return_pdf_url %}<a class="button itam-primary" href="{{ return_pdf_url }}" target="_blank" rel="noopener">{{ return_document_title }}</a>{% endif %}
             {% if assignment.signed_act_pdf %}
                 <details id="act-pdf-actions" class="itam-act-menu">
                     <summary class="button itam-primary">Acciones del PDF</summary>

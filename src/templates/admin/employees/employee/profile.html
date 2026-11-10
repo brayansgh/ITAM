@@ -3,7 +3,7 @@
 
 {% block extrastyle %}
     {{ block.super }}
-    {% if employee_detail %}<link rel="stylesheet" href="{% static 'itam/employee-profile.css' %}?v=1">{% endif %}
+    {% if employee_detail %}<link rel="stylesheet" href="{% static 'itam/employee-profile.css' %}?v=2">{% endif %}
 {% endblock %}
 
 {% block nav-breadcrumbs %}
@@ -39,7 +39,7 @@
                         <span>{{ original.company }}</span>
                     </p>
                 </div>
-                {% if employee_assignment_url or has_change_permission or active_return_url or employee_history_url %}
+                {% if employee_assignment_url or has_change_permission or active_return_url or employee_history_url or employee_offboarding_url %}
                     <div class="itam-employee-actions">
                         {% if employee_assignment_url %}
                             <a class="button itam-primary" href="{{ employee_assignment_url }}">Asignar activo</a>
@@ -47,10 +47,11 @@
                         {% if has_change_permission %}
                             <a class="itam-employee-secondary" href="{{ employee_edit_url }}">Editar empleado</a>
                         {% endif %}
-                        {% if active_return_url or employee_history_url %}
+                        {% if active_return_url or employee_history_url or employee_offboarding_url %}
                             <details class="itam-employee-menu">
                                 <summary>Acciones</summary>
                                 <ul>
+                                    {% if employee_offboarding_url %}<li><a href="{{ employee_offboarding_url }}">Desvinculación</a></li>{% endif %}
                                     {% if active_return_url %}<li><a href="{{ active_return_url }}">Devolver activos</a></li>{% endif %}
                                     {% if employee_history_url %}<li><a href="{{ employee_history_url }}">Ver histórico</a></li>{% endif %}
                                 </ul>
@@ -77,31 +78,37 @@
                     <dd>{{ original.phone|default:'Sin dato' }}</dd>
                 </dl>
             </div>
-            <div id="employee-custody" data-itam-panel hidden>
+            <section id="employee-custody" data-itam-panel hidden aria-labelledby="employee-custody-title">
+                <h3 class="itam-employee-section-title" id="employee-custody-title">Activos bajo custodia</h3>
                 {% if can_employee_custody %}
-                    {% for assignment in employee_custody %}
-                        <p><a href="{% url 'admin:assignments_assignment_change' assignment.pk %}">{{ assignment.asset }}</a> · {{ assignment.get_status_display }}</p>
-                    {% empty %}<p>Sin activos bajo custodia.</p>{% endfor %}
-                {% else %}<p>Sin permiso para consultar custodia.</p>{% endif %}
-            </div>
-            <div id="employee-history" data-itam-panel hidden>
+                    {% include "admin/employees/employee/assignment_list.html" with assignments=employee_custody empty_text="Sin activos bajo custodia." %}
+                {% else %}<p class="itam-notice">Sin permiso para consultar custodia.</p>{% endif %}
+            </section>
+            <section id="employee-history" data-itam-panel hidden aria-labelledby="employee-history-title">
+                <h3 class="itam-employee-section-title" id="employee-history-title">Historial de asignaciones</h3>
                 {% if can_employee_custody %}
-                    {% for assignment in employee_assignments %}
-                        <p><a href="{% url 'admin:assignments_assignment_change' assignment.pk %}">{{ assignment.asset }}</a> · {{ assignment.get_status_display }}</p>
-                    {% empty %}<p>Sin movimientos registrados.</p>{% endfor %}
-                {% else %}<p>Sin permiso para consultar movimientos.</p>{% endif %}
-            </div>
-            <div id="employee-documents" data-itam-panel hidden>
-                <ul class="itam-result-list">
-                    {% for document in employee_documents %}
-                        <li>
-                            <strong>{{ document.label }}</strong> · {{ document.date|date:"d/m/Y H:i:s T" }}
-                            · <a href="{{ document.url }}" target="_blank" rel="noopener">Ver PDF</a>
-                            {% if document.receipt_url %} · <a href="{{ document.receipt_url }}">Ver resumen</a>{% endif %}
-                        </li>
-                    {% empty %}<li>Sin documentos visibles para este empleado.</li>{% endfor %}
-                </ul>
-            </div>
+                    {% include "admin/employees/employee/assignment_list.html" with assignments=employee_assignments empty_text="Sin movimientos registrados." show_return=True %}
+                {% else %}<p class="itam-notice">Sin permiso para consultar movimientos.</p>{% endif %}
+            </section>
+            <section id="employee-documents" data-itam-panel hidden aria-labelledby="employee-documents-title">
+                <h3 class="itam-employee-section-title" id="employee-documents-title">Documentos</h3>
+                {% if employee_documents %}
+                    <ul class="itam-employee-records">
+                        {% for document in employee_documents %}
+                            <li class="itam-employee-record">
+                                <div class="itam-employee-record-info">
+                                    <strong>{{ document.label }}</strong>
+                                    <p>{{ document.date|date:"d/m/Y H:i:s T" }}</p>
+                                </div>
+                                <div class="itam-table-actions">
+                                    <a class="itam-table-action" href="{{ document.url }}" target="_blank" rel="noopener">Ver PDF</a>
+                                    {% if document.receipt_url %}<a class="itam-table-action" href="{{ document.receipt_url }}">Ver resumen</a>{% endif %}
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}<p class="itam-notice">Sin documentos visibles para este empleado.</p>{% endif %}
+            </section>
         </section>
     {% else %}{{ block.super }}{% endif %}
 {% endblock %}

@@ -112,11 +112,8 @@ def generate_and_save_offboarding_pdf(record):
     pdf_data = buffer.getvalue()
 
     # Crear nombre único para cada acta.
-    doc_num = str(record.pk) if record.return_reason else (employee.document_number or str(employee.pk))
-
-    filename = (
-        f"Acta_Devolucion_{doc_num}_{record.pk}.pdf"
-    )
+    document_kind = "Devolucion" if record.return_reason else "Desvinculacion"
+    filename = f"Acta_{document_kind}_{record.pk}.pdf"
 
     # Guardar el PDF en el registro de devolución.
     record.pdf.save(
