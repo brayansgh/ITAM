@@ -1,0 +1,7 @@
+# El Dockerfile instala dependencias. La aplicación se monta en ejecución.
+**
+!docker/
+!docker/app/
+!docker/app/Dockerfile
+!requirements/
+!requirements/base.txt

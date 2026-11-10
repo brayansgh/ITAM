@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 'verbose_name': 'Resumen por Usuario',
-                'verbose_name_plural': '2. Resumen por Usuarios',
+                'verbose_name_plural': 'Resumen por Usuarios',
                 'proxy': True,
                 'indexes': [],
                 'constraints': [],
@@ -26,6 +26,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterModelOptions(
             name='assignment',
-            options={'ordering': ['-assigned_at'], 'verbose_name': 'Historial de Asignación', 'verbose_name_plural': '1. Historial de Asignaciones'},
+            options={'ordering': ['-assigned_at'], 'verbose_name': 'Historial de Asignación', 'verbose_name_plural': 'Historial de Asignaciones'},
         ),
     ]

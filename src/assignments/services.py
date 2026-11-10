@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from inventory.models import Asset, AssetStatus
 from employees.models import Employee
 from employees.validation import validate_assignment_recipient
@@ -8,6 +10,38 @@ from django.utils import timezone
 from inventory.models import AssetStatus
 
 from .models import Assignment, AssignmentStatus
+
+
+def create_delivery(*, employee_id, assigned_by, items, observations):
+    from .utils import AssignmentActError, discard_new_act, generate_act_pdf, save_assignment_act
+
+    asset_ids = {item["asset_id"] for item in items}
+    if not items or len(asset_ids) != len(items):
+        raise ValidationError("Selecciona al menos un activo y evita repetirlo en la entrega.")
+
+    first = None
+    delivery_id = uuid4()
+    try:
+        with transaction.atomic():
+            # Adquirir todos los bloqueos de activos antes de bloquear al empleado.
+            list(Asset.objects.filter(pk__in=asset_ids).order_by("pk").select_for_update())
+            assignments = [
+                create_assignment(
+                    employee_id=employee_id, assigned_by=assigned_by,
+                    observations=observations, delivery_id=delivery_id, **item,
+                )
+                for item in items
+            ]
+            first = assignments[0]
+            try:
+                generate_act_pdf(first)
+            except Exception as error:
+                raise AssignmentActError("No se pudo generar el PDF de la entrega.") from error
+            save_assignment_act(first, assignments, actor=assigned_by)
+    except Exception:
+        discard_new_act(first)
+        raise
+    return first
 
 
 @transaction.atomic
@@ -75,7 +109,7 @@ def return_assignment(*, assignment_id, condition, returned_by=None):
 
     return assignment
 @transaction.atomic
-def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition, observations=None):
+def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition, observations=None, delivery_id=None):
     """
     Crea una asignación y actualiza el estado del activo.
 
@@ -124,6 +158,7 @@ def create_assignment(*, asset_id, employee_id, assigned_by, initial_condition, 
         assigned_by=assigned_by,
         initial_condition=initial_condition,
         observations=observations,
+        delivery_id=delivery_id,
         status=AssignmentStatus.ACTIVE,
     )
 

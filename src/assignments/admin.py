@@ -2,6 +2,7 @@ from inventory.navigation import AssetLinkAdminMixin, asset_link
 from core.admin_audit import StandardHistoryAdmin
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.helpers import AdminForm
 from django.contrib.admin.options import IS_POPUP_VAR
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
@@ -20,7 +21,7 @@ from .models import (
     OffboardingRecord,
     OffboardingRecordItem,
 )
-from .services import create_assignment, link_return_to_decommission
+from .services import create_assignment, create_delivery, link_return_to_decommission
 from .utils import AssignmentActError, issue_assignment_act
 
 
@@ -34,7 +35,7 @@ class AssignmentAdminForm(forms.ModelForm):
         cleaned_data = super().clean()
 
         # Estas validaciones solo aplican al crear asignaciones.
-        if self.instance.pk:
+        if not self.instance._state.adding:
             return cleaned_data
 
         asset = cleaned_data.get("asset")
@@ -58,11 +59,16 @@ class AssignmentAdminForm(forms.ModelForm):
 @admin.action(description="Generar/Regenerar Acta PDF para seleccionados")
 def generate_pdf_action(modeladmin, request, queryset):
     generated = 0
+    deliveries = set()
 
     for obj in queryset:
+        if obj.delivery_id in deliveries:
+            continue
         try:
             issue_assignment_act(obj.pk, actor=request.user)
             generated += 1
+            if obj.delivery_id:
+                deliveries.add(obj.delivery_id)
 
         except AssignmentActError:
             modeladmin.message_user(
@@ -81,6 +87,8 @@ def generate_pdf_action(modeladmin, request, queryset):
 
 @admin.register(Assignment)
 class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
+    change_form_template = "assignments/assignment_detail.html"
+    add_form_template = "admin/change_form.html"
 
     exclude = ("signed_act_pdf",)
 
@@ -112,6 +120,58 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
     date_hierarchy = "assigned_at"
     actions = [generate_pdf_action]
     form = AssignmentAdminForm
+
+    def add_view(self, request, form_url="", extra_context=None):
+        # Conservar el alta tradicional de ventanas emergentes y formularios anteriores.
+        if (IS_POPUP_VAR in request.GET or IS_POPUP_VAR in request.POST
+                or (request.method == "POST" and "_save" in request.POST
+                    and not any(key.startswith("activos-") for key in request.POST))):
+            return super().add_view(request, form_url, extra_context)
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+
+        data = request.POST if request.method == "POST" else None
+        form_class = self.get_form(request)
+        form = form_class(data, initial=self.get_changeform_initial_data(request))
+        form.fields["initial_condition"].widget.attrs["rows"] = 3
+        form.fields["observations"].widget.attrs["rows"] = 3
+        extra_form = type("DeliveryItemForm", (forms.Form,), {
+            name: form.fields[name] for name in ("asset", "initial_condition")
+        })
+        items = forms.formset_factory(extra_form, extra=0, max_num=49, validate_max=True, absolute_max=49)(
+            data, prefix="activos",
+        )
+        if data is not None and form.is_valid() and items.is_valid():
+            rows = [form.cleaned_data, *(row for row in items.cleaned_data if row)]
+            try:
+                assignment = create_delivery(
+                    employee_id=form.cleaned_data["employee"].pk,
+                    assigned_by=request.user,
+                    observations=form.cleaned_data["observations"],
+                    items=[{
+                        "asset_id": row["asset"].pk,
+                        "initial_condition": row["initial_condition"],
+                    } for row in rows],
+                )
+            except ValidationError as error:
+                form.add_error(None, error)
+            except AssignmentActError as error:
+                form.add_error(None, str(error))
+            else:
+                self.log_addition(request, assignment, "Entrega de activos registrada.")
+                self.message_user(request, "Entrega registrada y acta PDF generada.", messages.SUCCESS)
+                return redirect("admin:assignments_assignment_act", assignment_id=assignment.pk)
+
+        return render(request, "assignments/delivery_form.html", {
+            **self.admin_site.each_context(request),
+            **(extra_context or {}),
+            "title": "Asignar activos",
+            "opts": self.opts,
+            "form": form,
+            "adminform": AdminForm(form, [], {}),
+            "items": items,
+            "media": self.media + form.media,
+        })
 
     def _user_has_role(self, request, *roles):
         user = request.user
@@ -145,11 +205,16 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
         )
 
     def has_change_permission(self, request, obj=None):
-        return self._user_has_role(
-            request,
-            Role.ADMINISTRATOR,
-            Role.TECHNOLOGY,
-        )
+        return False
+
+    def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
+        if obj is not None and not add:
+            context.update(
+                title="Consultar asignación",
+                assignment_asset=asset_link(request, obj.asset, self.admin_site),
+                assignment_documents=self.download_pdf(obj, request),
+            )
+        return super().render_change_form(request, context, add, change, form_url, obj)
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -252,7 +317,10 @@ class AssignmentAdmin(AssetLinkAdminMixin, StandardHistoryAdmin):
             **self.admin_site.each_context(request),
             "title": "Actas de asignación",
             "assignment": assignment,
-            "delivery_assets": [asset_link(request, assignment.asset, self.admin_site)],
+            "delivery_assets": [
+                asset_link(request, item.asset, self.admin_site)
+                for item in assignment.delivery_assignments().select_related("asset")
+            ],
             "show_selector": can_generate and request.GET.get("confirmada") == "1",
             "can_generate": can_generate,
             "return_pdf_url": return_pdf_url,

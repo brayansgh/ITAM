@@ -1,0 +1,39 @@
+{% extends "admin/change_form.html" %}
+
+{% block content %}
+<div id="content-main" class="itam-detail-panels">
+    <div class="itam-table-actions">
+        <a class="itam-table-action" href="{% url 'admin:assignments_assignment_changelist' %}">Volver al listado</a>
+        <a class="button itam-primary" href="{% url 'admin:assignments_assignment_history' original.pk %}">Ver historial de cambios</a>
+    </div>
+    <div class="itam-details-grid">
+        <section class="itam-panel" aria-labelledby="assignment-custody">
+            <h2 id="assignment-custody">Custodia</h2>
+            <dl class="itam-data">
+                <dt>Activo</dt><dd>{{ assignment_asset }}</dd>
+                <dt>Empleado responsable</dt><dd>{{ original.employee }}</dd>
+                <dt>Estado</dt><dd><span class="itam-label">{{ original.get_status_display }}</span></dd>
+                <dt>Asignado por</dt><dd>{{ original.assigned_by.get_display_name|default:"Sin responsable registrado" }}</dd>
+                <dt>Fecha de entrega</dt><dd>{{ original.assigned_at|date:"d/m/Y H:i T" }}</dd>
+                <dt>Fecha de devolución</dt><dd>{{ original.returned_at|date:"d/m/Y H:i T"|default:"Sin fecha registrada" }}</dd>
+            </dl>
+        </section>
+        <section class="itam-panel" aria-labelledby="assignment-condition">
+            <h2 id="assignment-condition">Condiciones y observaciones</h2>
+            <dl class="itam-data">
+                <dt>Condición de entrega</dt><dd>{{ original.initial_condition|default:"Sin dato"|linebreaksbr }}</dd>
+                <dt>Condición de devolución</dt><dd>{{ original.return_condition|default:"Sin dato"|linebreaksbr }}</dd>
+                <dt>Observaciones</dt><dd>{{ original.observations|default:"Sin observaciones"|linebreaksbr }}</dd>
+            </dl>
+        </section>
+    </div>
+    <section class="itam-panel" aria-labelledby="assignment-documents">
+        <h2 id="assignment-documents">Documentos</h2>
+        {% if assignment_documents == "—" %}
+            <p class="itam-secondary">Sin documentos disponibles.</p>
+        {% else %}
+            {{ assignment_documents }}
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

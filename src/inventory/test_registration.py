@@ -301,7 +301,7 @@ class AssetRegistrationTests(TestCase):
         self.assertContains(self.client.get(detail), 'Asignar activo')
         form = self.client.get(shortcut).context['adminform'].form
         self.assertEqual(str(form['asset'].value()), str(asset.pk))
-        self.assertContains(self.client.get(shortcut), 'Observaciones / Pérdida / Daños')
+        self.assertContains(self.client.get(shortcut), 'Observaciones generales')
         observations = 'Incluye cargador & cable.\nLeve rayón en la carcasa.'
         response = self.client.post(shortcut, {
             'asset': asset.pk, 'employee': employee.pk, 'initial_condition': 'Operativo',

@@ -87,7 +87,12 @@ USE_TZ = True
 
 # Rutas para archivos estáticos y media
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'static'
+STATIC_ROOT = Path(env('DJANGO_STATIC_ROOT', default=str(BASE_DIR / 'static')))
+if STATIC_ROOT != BASE_DIR / 'static':
+    STATICFILES_DIRS = [
+        (directory, BASE_DIR / 'static' / directory)
+        for directory in ('img', 'itam', 'js')
+    ]
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -105,6 +110,14 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 # Protección contra robo de sesiones (XSS)
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
+
+# Activar únicamente cuando Nginx termine TLS y sobrescriba X-Forwarded-Proto.
+if env.bool('DJANGO_HTTPS', default=False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = env.int('DJANGO_HSTS_SECONDS', default=0)
 
 # Recuperación de contraseña por correo corporativo.
 EMAIL_HOST = env('EMAIL_HOST', default='')

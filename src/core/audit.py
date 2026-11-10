@@ -6,7 +6,7 @@ from django.db import models
 from django.utils import formats, timezone
 
 
-IGNORED_FIELDS = {"id", "created_at", "updated_at", "last_login"}
+IGNORED_FIELDS = {"id", "created_at", "updated_at", "last_login", "delivery_id"}
 SENSITIVE_FIELDS = {"password"}
 FIELD_LABELS = {
     "username": "Usuario", "first_name": "Nombres", "last_name": "Apellidos",

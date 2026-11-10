@@ -1,0 +1,14 @@
+<fieldset class="itam-delivery-item"{% if not first %} data-delivery-item{% endif %}>
+    <legend class="itam-label">{% if first %}Primer activo{% else %}Activo adicional{% endif %}</legend>
+    <div class="itam-details-grid">
+        <div class="itam-delivery-field">{{ item.asset.as_field_group }}</div>
+        <div class="itam-delivery-field">{{ item.initial_condition.as_field_group }}</div>
+    </div>
+    {% if not first %}
+        <div class="itam-delivery-item-actions">
+            <button type="button" class="itam-delivery-secondary" data-remove-item>
+                <span aria-hidden="true">−</span> Quitar activo
+            </button>
+        </div>
+    {% endif %}
+</fieldset>

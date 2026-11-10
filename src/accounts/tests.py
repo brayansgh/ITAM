@@ -36,7 +36,8 @@ class AccountAdminTests(TestCase):
         self.assertContains(response, 'name="role"')
         self.assertNotContains(response, "pbkdf2_sha256")
         self.assertNotContains(response, self.target.password)
-        self.assertContains(response, f"../../{self.target.pk}/password/")
+        change_password_url = reverse("admin:auth_user_password_change", args=[self.target.pk])
+        self.assertContains(response, f'href="{change_password_url}"')
 
     def test_password_submission_cannot_overwrite_hash(self):
         previous = self.target.password

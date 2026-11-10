@@ -122,12 +122,18 @@ class EmployeeAdmin(StandardHistoryAdmin):
         return super().response_change(request, obj)
 
     def employee_documents(self, request, employee, assignments, assignment_admin):
-        documents = [
-            {"label": f"Acta de entrega · {assignment.asset}", "date": assignment.assigned_at,
-             "url": reverse("download_act_pdf", args=[assignment.pk])}
-            for assignment in assignments.exclude(signed_act_pdf="").exclude(signed_act_pdf__isnull=True)
-            if assignment_admin.has_view_permission(request, assignment)
-        ]
+        documents = []
+        seen = set()
+        for assignment in assignments.exclude(signed_act_pdf="").exclude(signed_act_pdf__isnull=True):
+            name = assignment.signed_act_pdf.name
+            if name in seen or not assignment_admin.has_view_permission(request, assignment):
+                continue
+            seen.add(name)
+            documents.append({
+                "label": "Acta de entrega de activos" if assignment.delivery_id else f"Acta de entrega · {assignment.asset}",
+                "date": assignment.assigned_at,
+                "url": reverse("download_act_pdf", args=[assignment.pk]),
+            })
         returns_admin = self.admin_site._registry[OffboardingRecord]
         for record in returns_admin.get_queryset(request).filter(employee=employee).select_related("employee").exclude(pdf="").exclude(pdf__isnull=True):
             if returns_admin.can_view_receipt(request, record):

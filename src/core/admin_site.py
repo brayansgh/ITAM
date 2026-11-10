@@ -234,6 +234,9 @@ class ITAMAdminSite(AdminSite):
             if date:
                 key = 'created_at' if field else 'maintenance__created_at'
                 qs = qs.filter(**{key + '__date__' + lookup: date})
+        if kind == 'entrega':
+            documents = qs.order_by('signed_act_pdf', 'created_at', 'pk').distinct('signed_act_pdf')
+            qs = qs.filter(pk__in=Subquery(documents.values('pk')))
         page = Paginator(qs, 25).get_page(request.GET.get('page'))
         rows = []
         for obj in page:
@@ -241,7 +244,8 @@ class ITAMAdminSite(AdminSite):
             if not ma.has_view_permission(request, record):
                 continue
             if kind == 'entrega':
-                url, label = reverse('download_act_pdf', args=[obj.pk]), str(obj.asset)
+                url = reverse('download_act_pdf', args=[obj.pk])
+                label = 'Entrega de activos' if obj.delivery_id else str(obj.asset)
             elif kind in ('devolucion', 'desvinculacion'):
                 url, label = reverse('admin:assignments_offboardingrecord_view_pdf', args=[obj.pk]), str(obj.employee)
             else:

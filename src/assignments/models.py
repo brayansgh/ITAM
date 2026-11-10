@@ -68,6 +68,13 @@ class Assignment(BaseModel):
         null=True,
         verbose_name="Acta de Entrega (PDF)",
     )
+    delivery_id = models.UUIDField(null=True, editable=False, db_index=True)
+
+    def delivery_assignments(self):
+        assignments = type(self).objects.all()
+        if self.delivery_id:
+            return assignments.filter(delivery_id=self.delivery_id).order_by("assigned_at", "pk")
+        return assignments.filter(pk=self.pk)
 
     class Meta:
         verbose_name = "Historial de Asignación"
@@ -124,7 +131,7 @@ class EmployeeAssetSummary(Employee):
     class Meta:
         proxy = True
         verbose_name = "Resumen por Usuario"
-        verbose_name_plural = "2. Resumen por Usuarios"
+        verbose_name_plural = "Resumen por Usuarios"
 
 
 # Modelo para actas de devolución

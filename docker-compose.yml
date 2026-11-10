@@ -1,9 +1,16 @@
+x-logging: &rotating-logs
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 
 services:
   itam-db:
     image: postgres:16-alpine
     container_name: itam-db
     restart: always
+    logging: *rotating-logs
     volumes:
       - ./postgres:/var/lib/postgresql/data
     env_file:
@@ -21,10 +28,20 @@ services:
       dockerfile: docker/app/Dockerfile
     container_name: itam-web
     restart: always
-    command: python manage.py runserver 0.0.0.0:8000
+    logging: *rotating-logs
+    command:
+      - sh
+      - -ec
+      - |
+        python manage.py collectstatic --noinput --clear
+        exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --threads 4 --timeout 120
+    environment:
+      DJANGO_DEBUG: "False"
+      DJANGO_STATIC_ROOT: /app/static
     volumes:
       - ./src:/app/src
       - ./media:/app/src/media
+      - itam_static:/app/static
     env_file:
       - .env
     depends_on:
@@ -36,17 +53,19 @@ services:
     image: nginx:alpine
     container_name: itam-nginx
     restart: always
+    logging: *rotating-logs
     ports:
       - "80:80"
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./src/static:/app/src/static:ro
-      - ./media:/app/src/media:ro
-      - ./media:/app/media:ro
+      - itam_static:/app/static:ro
     depends_on:
       - itam-web
     networks:
       - itam_network
+
+volumes:
+  itam_static:
 
 networks:
   itam_network:

@@ -403,7 +403,7 @@ class AssignmentAdminPermissionsTests(TestCase):
         self.assertTrue(self.admin.has_module_permission(request))
         self.assertTrue(self.admin.has_view_permission(request))
         self.assertTrue(self.admin.has_add_permission(request))
-        self.assertTrue(self.admin.has_change_permission(request))
+        self.assertFalse(self.admin.has_change_permission(request))
         self.assertFalse(self.admin.has_delete_permission(request))
 
     def test_technology_permissions(self):
@@ -412,7 +412,7 @@ class AssignmentAdminPermissionsTests(TestCase):
         self.assertTrue(self.admin.has_module_permission(request))
         self.assertTrue(self.admin.has_view_permission(request))
         self.assertTrue(self.admin.has_add_permission(request))
-        self.assertTrue(self.admin.has_change_permission(request))
+        self.assertFalse(self.admin.has_change_permission(request))
         self.assertFalse(self.admin.has_delete_permission(request))
 
     def test_consultation_permissions(self):

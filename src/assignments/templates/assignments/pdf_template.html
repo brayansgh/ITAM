@@ -47,14 +47,16 @@
     </table>
 
     <table>
-        <tr class="bg-gray bold text-center">
+        <thead><tr class="bg-gray bold text-center">
             <td width="16%">ELEMENTO</td><td width="16%">ACTIVO FIJO</td>
             <td width="16%">CÓDIGO INTERNO</td><td width="14%">MARCA</td>
             <td width="18%">MODELO</td><td width="20%">SERIAL</td>
-        </tr>
+            {% if show_conditions %}<td>CONDICIÓN DE ENTREGA</td>{% endif %}
+        </tr></thead>
         {% for asg in assignments %}
         <tr class="text-center">
             {% include "assignments/pdf_asset_cells.html" with asset=asg.asset only %}
+            {% if show_conditions %}<td>{{ asg.initial_condition|linebreaksbr }}</td>{% endif %}
         </tr>
         {% empty %}
         <tr><td colspan="6" class="text-center">No hay activos registrados.</td></tr>

@@ -1,0 +1,106 @@
+.itam-delivery-panel {
+    border-inline-start: 4px solid var(--itam-action-bg);
+}
+
+.itam-delivery-panel .itam-note {
+    margin-top: -8px;
+}
+
+.itam-delivery-field {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    min-width: 0;
+}
+
+.itam-delivery-field label {
+    color: var(--link-fg);
+    font-weight: 600;
+}
+
+.itam-delivery-field .help {
+    margin: 0;
+    padding: 0;
+    color: var(--body-quiet-color);
+}
+
+#content .itam-delivery-field textarea {
+    min-height: 84px;
+    height: 96px;
+}
+
+.itam-delivery-item {
+    min-inline-size: 0;
+    margin: 0 0 14px;
+    padding: 12px 16px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--darkened-bg);
+}
+
+.itam-delivery-item-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.itam-delivery-footer,
+.itam-delivery-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.itam-delivery-footer p {
+    margin: 0;
+}
+
+#delivery-form .itam-delivery-secondary,
+#delivery-form input[type="submit"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    max-width: 100%;
+    margin: 0;
+    padding: 9px 14px;
+    border-radius: 7px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: center;
+    white-space: normal;
+}
+
+#delivery-form .itam-delivery-secondary {
+    border: 1px solid var(--border-color);
+    background: var(--darkened-bg);
+    color: var(--link-fg);
+    cursor: pointer;
+}
+
+#delivery-form .itam-delivery-secondary:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--selected-row);
+}
+
+#delivery-form .itam-delivery-secondary:disabled {
+    color: var(--body-quiet-color);
+    cursor: not-allowed;
+    opacity: .7;
+}
+
+@media (max-width: 767px) {
+    .itam-delivery-item {
+        padding-inline: 12px;
+    }
+
+    .itam-delivery-actions {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+}

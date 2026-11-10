@@ -1,6 +1,8 @@
 from django import forms
 from django.contrib.auth.forms import UserChangeForm
 from django.contrib.auth.hashers import is_password_usable
+from django.urls import reverse
+from django.utils.html import format_html
 
 
 class PasswordStatusWidget(forms.Widget):
@@ -21,7 +23,13 @@ class AccountUserChangeForm(UserChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if "password" in self.fields:
-            self.fields["password"].widget = PasswordStatusWidget()
+            password = self.fields["password"]
+            password.widget = PasswordStatusWidget()
+            if self.instance.pk:
+                password.help_text = format_html(
+                    '<a href="{}">Cambiar contraseña</a>',
+                    reverse("admin:auth_user_password_change", args=[self.instance.pk]),
+                )
         descriptions = {
             "role": "Controla los flujos de ITAM. No asigna automáticamente permisos de Django.",
             "is_staff": "Permite entrar al administrador. Los grupos y permisos determinan qué módulos puede usar.",
