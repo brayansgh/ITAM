@@ -60,15 +60,17 @@ class OrganizationIntegrityTests(TestCase):
             assignment.status = AssignmentStatus.ACTIVE
             assignment.save()
 
-    def test_employee_wrong_site_or_area_is_rejected(self):
-        for field, value in [("site", self.foreign_site), ("area", self.foreign_area)]:
-            with self.subTest(field=field):
-                self.employee.refresh_from_db()
-                setattr(self.employee, field, value)
-                with self.assertRaises(ValidationError): self.employee.full_clean()
-                with self.assertRaises(ValidationError): self.employee.save()
+    def test_employee_can_share_a_site_and_must_use_an_area_of_its_company(self):
+        self.employee.site = self.foreign_site
+        self.employee.full_clean()
+        self.employee.save(update_fields=["site"])
+        self.employee.area = self.foreign_area
+        with self.assertRaises(ValidationError):
+            self.employee.full_clean()
+        with self.assertRaises(ValidationError):
+            self.employee.save()
         self.employee.refresh_from_db()
-        self.assertEqual(self.employee.site, self.site)
+        self.assertEqual(self.employee.site, self.foreign_site)
         self.assertEqual(self.employee.area, self.area)
 
     def test_asset_shared_site_is_allowed_in_model_and_form(self):
@@ -83,14 +85,14 @@ class OrganizationIntegrityTests(TestCase):
                                "category": self.category.pk, "asset_tag": "ORG-NEW"})
         self.assertTrue(form.is_valid(), form.errors)
 
-    def test_parent_company_change_cannot_invalidate_existing_links(self):
-        for obj in (self.site, self.area):
-            with self.subTest(model=type(obj).__name__):
-                obj.company = self.other
-                with self.assertRaises(ValidationError): obj.full_clean()
-                with self.assertRaises(ValidationError): obj.save()
-                obj.refresh_from_db()
-                self.assertEqual(obj.company, self.company)
+    def test_area_company_change_cannot_invalidate_existing_links(self):
+        self.area.company = self.other
+        with self.assertRaises(ValidationError):
+            self.area.full_clean()
+        with self.assertRaises(ValidationError):
+            self.area.save()
+        self.area.refresh_from_db()
+        self.assertEqual(self.area.company, self.company)
 
     def test_unused_site_and_area_can_move_company(self):
         for obj in (self.foreign_site, self.foreign_area):
@@ -127,11 +129,14 @@ class OrganizationIntegrityTests(TestCase):
         self.assertEqual(self.employee.company, self.other)
         self.assertEqual(self.employee.site, self.foreign_site)
 
-    def test_site_can_change_owner_when_only_shared_assets_reference_it(self):
-        self.employee.site = None
-        self.employee.save()
+    def test_site_can_change_legacy_company_with_existing_references(self):
         self.site.company = self.other
+        self.site.full_clean()
         self.site.save()
+        self.employee.refresh_from_db()
+        self.employee.full_clean()
+        self.assertEqual(self.employee.site, self.site)
+        self.assertEqual(self.employee.company, self.company)
         self.asset.refresh_from_db()
         self.asset.full_clean()
         self.assertEqual(self.asset.site, self.site)

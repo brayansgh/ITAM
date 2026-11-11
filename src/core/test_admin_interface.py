@@ -29,6 +29,9 @@ class CorporateAdminTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, 'img/palma.png')
                 self.assertContains(response, 'itam/admin.css')
+                self.assertEqual(response.content.count(b'id="footer"'), 1)
+                self.assertContains(response, 'C.I. Acepalma S.A.')
+                self.assertContains(response, 'Dirección de Tecnología | ITAM')
 
     def test_breadcrumbs_use_current_navigation_labels(self):
         import re
@@ -109,17 +112,21 @@ class CorporateAdminTests(TestCase):
         self.client.logout()
         self.assertNotContains(self.client.get(reverse('admin:login')), 'class="itam-menu-toggle"')
 
-    def test_admin_lists_have_no_bulk_actions_or_selection_checkboxes(self):
+    def test_only_imports_offer_bulk_actions_and_bulk_deletion_is_disabled(self):
         from django.contrib import admin
         from django.test import RequestFactory
         request = RequestFactory().get('/')
         request.user = self.user
         for model, model_admin in admin.site._registry.items():
             with self.subTest(model=model._meta.label):
-                self.assertEqual(model_admin.get_actions(request), {})
+                actions = set(model_admin.get_actions(request))
+                expected = {"approve_selected", "reject_selected", "publish_selected"} if (
+                    model._meta.label_lower == "data_imports.stagingasset"
+                ) else set()
+                self.assertEqual(actions, expected)
         for model in ['inventory_category', 'inventory_asset', 'employees_employee',
                       'employees_retiredemployee', 'assignments_assignment',
-                      'maintenance_maintenancerecord', 'data_imports_stagingasset',
+                      'maintenance_maintenancerecord',
                       'accounts_user', 'auth_group']:
             with self.subTest(listing=model):
                 response = self.client.get(reverse(f'admin:{model}_changelist'))

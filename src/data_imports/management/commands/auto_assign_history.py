@@ -19,7 +19,7 @@ class Command(BaseCommand):
 
         # Filtrar registros importados que sí tenían un empleado en el Excel
         imported_with_user = StagingAsset.objects.filter(
-            status=ImportStatus.IMPORTED
+            status=ImportStatus.IMPORTED, batch_id__isnull=True
         ).exclude(employee_name__isnull=True).exclude(employee_name__exact='')
 
         count = 0

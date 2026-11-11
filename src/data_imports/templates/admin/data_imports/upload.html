@@ -1,0 +1,48 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'itam/import-upload.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Inicio</a>
+    &rsaquo; <a href="{% url 'admin:data_imports_stagingasset_changelist' %}">Importaciones</a>
+    &rsaquo; Cargar Excel
+</div>
+{% endblock %}
+
+{% block content_title %}
+<header class="itam-page-heading">
+    <div>
+        <h1>{{ title }}</h1>
+        <p>Podrás revisar y corregir los registros antes de aprobarlos.</p>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="itam-import-upload">
+    <form class="itam-panel itam-import-upload__form" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <div class="itam-import-upload__field">
+            {{ form.workbook.label_tag }}
+            {{ form.workbook }}
+            <p id="{{ form.workbook.auto_id }}_helptext">{{ form.workbook.help_text }}</p>
+            {{ form.workbook.errors }}
+        </div>
+        <div class="submit-row">
+            <input type="submit" class="default" value="Cargar para revisión">
+            <a class="closelink" href="{% url 'admin:data_imports_stagingasset_changelist' %}">Volver a importaciones</a>
+        </div>
+    </form>
+    <aside class="itam-panel itam-import-upload__template" aria-labelledby="import-template-title">
+        <h2 id="import-template-title">Plantilla de importación</h2>
+        <p>Incluye las hojas de empleados y activos, instrucciones y los catálogos vigentes de ITAM.</p>
+        <a href="{% url 'admin:data_imports_workbook' %}">Descargar plantilla Excel</a>
+    </aside>
+</div>
+{% endblock %}

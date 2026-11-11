@@ -10,6 +10,9 @@ class ImportStatus(models.TextChoices):
 
 class StagingAsset(BaseModel):
     history = HistoricalRecords()
+    batch_id = models.UUIDField(null=True, blank=True, editable=False, db_index=True)
+    workbook_data = models.JSONField(default=dict, editable=False, blank=True)
+    import_reference = models.CharField(max_length=100, blank=True, editable=False)
     sheet_name = models.CharField(max_length=50)
     row_number = models.IntegerField()
     employee_name = models.CharField(max_length=255, blank=True, null=True)
@@ -31,6 +34,15 @@ class StagingAsset(BaseModel):
     observations = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=ImportStatus.choices, default=ImportStatus.PENDING)
     validation_notes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['import_reference'],
+                condition=models.Q(status=ImportStatus.IMPORTED) & ~models.Q(import_reference=''),
+                name='unique_published_asset_import_reference',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.sheet_name} Fila {self.row_number} - {self.legacy_asset_tag or 'Sin Placa'}"

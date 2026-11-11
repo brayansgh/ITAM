@@ -1,0 +1,67 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'itam/import-review.css' %}">
+{% endblock %}
+
+{% block nav-breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Inicio</a>
+    &rsaquo; <a href="{{ return_url }}">Importaciones</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content_title %}
+<header class="itam-page-heading">
+    <h1>{{ title }}</h1>
+    <span class="itam-label">{{ row.get_status_display }}</span>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="itam-panel itam-import-review-actions">
+<nav aria-label="Navegación de la fila">
+    <a href="{{ return_url }}">Volver a importaciones</a>
+    {% if row.batch_id %}
+        <a href="{% url 'admin:data_imports_stagingasset_changelist' %}?batch_id__exact={{ row.batch_id }}">Ver filas de esta carga</a>
+    {% endif %}
+    {% if can_view_history %}
+        <a href="{% url 'admin:data_imports_stagingasset_history' row.pk %}">Histórico</a>
+    {% endif %}
+</nav>
+{% if can_edit or can_decide %}
+    <form method="post" action="{{ decision_url }}" aria-label="Acciones de revisión">
+        {% csrf_token %}
+        <input type="hidden" name="version" value="{{ row.updated_at.isoformat }}">
+        {% if can_edit %}
+            <a href="{{ edit_url }}">Editar datos</a>
+        {% endif %}
+        {% if can_decide and row.status != "REJECTED" %}
+            <button type="submit" name="decision" value="reject">Descartar fila</button>
+        {% endif %}
+        {% if can_publish %}
+            <button type="submit" class="itam-review-primary" name="decision" value="publish">Pasar a producción</button>
+        {% elif can_decide and row.status != "APPROVED" %}
+            <button type="submit" class="itam-review-primary" name="decision" value="approve">Aprobar fila</button>
+        {% endif %}
+    </form>
+{% endif %}
+</div>
+{% if row.validation_notes %}
+    <div class="errornote">{{ row.validation_notes|linebreaksbr }}</div>
+{% elif not row.batch_id %}
+    <p>Carga anterior. Usa la plantilla vigente para revisar y publicar datos con el nuevo flujo.</p>
+{% endif %}
+<div class="itam-panel itam-table-wrap">
+    <table>
+        <tbody>
+        {% for label, value in values %}
+            <tr><th scope="row">{{ label|capfirst }}</th><td>{{ value|default_if_none:"—"|linebreaksbr }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

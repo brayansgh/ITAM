@@ -1,0 +1,59 @@
+.itam-import-review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+
+.itam-import-review-actions :is(nav, form) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.itam-import-review-actions :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--itam-surface);
+  color: var(--link-fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+
+.itam-import-review-actions :is(a, button):hover {
+  background: var(--selected-row);
+}
+
+.itam-import-review-actions button.itam-review-primary {
+  border-color: var(--itam-action-bg);
+  background: var(--itam-action-bg);
+  color: var(--itam-action-ink);
+}
+
+.itam-import-review-actions button.itam-review-primary:hover {
+  background: var(--itam-action-hover-bg);
+}
+
+@media (max-width: 540px) {
+  .itam-import-review-actions :is(nav, form) {
+    width: 100%;
+  }
+
+  .itam-import-review-actions :is(a, button) {
+    flex: 1 1 140px;
+  }
+}

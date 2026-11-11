@@ -11,7 +11,7 @@ class Command(BaseCommand):
         parser.add_argument('--owner-code', choices=('ACE', 'SOL'), help='Propietaria explícita del lote; no se infiere de la administradora.')
 
     def handle(self, *args, **kwargs):
-        approved = StagingAsset.objects.filter(status=ImportStatus.APPROVED).order_by('row_number')
+        approved = StagingAsset.objects.filter(batch_id__isnull=True, status=ImportStatus.APPROVED).order_by('row_number')
         count = approved.count()
         
         if count == 0:
@@ -30,12 +30,15 @@ class Command(BaseCommand):
         
         for stg in approved:
             try:
-                if stg.employee_name:
+                if stg.employee_name or stg.employee_document:
                     raise CommandError(
                         'La fila incluye un custodio y no tiene condición de entrega. '
                         'Registra la custodia mediante el flujo de asignación.'
                     )
                 with transaction.atomic():
+                    stg = approved.select_for_update().filter(pk=stg.pk).first()
+                    if stg is None:
+                        continue
                     # 1. Crear o recuperar Organizaciones
                     comp_name = stg.company or 'Desconocida'
                     comp, _ = Company.objects.get_or_create(name=comp_name, defaults={'code': comp_name[:3].upper()})

@@ -613,6 +613,10 @@ button.itam-table-action {
   }
 }
 
+#footer:empty {
+  display: none;
+}
+
 /* Inicio y cierre de sesión */
 body.login.itam-auth { padding: 0; }
 
