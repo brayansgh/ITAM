@@ -1,0 +1,70 @@
+services:
+  itam-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: itam_staging
+      POSTGRES_USER: itam_staging
+      POSTGRES_PASSWORD: ${ITAM_STAGING_DB_PASSWORD:?Configura la contraseña de pruebas}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "itam_staging", "-d", "itam_staging"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks: [backend]
+
+  itam-web:
+    image: ${COMPOSE_PROJECT_NAME}-web:local
+    build:
+      context: ${ITAM_STAGING_CHECKOUT:?Configura la ruta de la copia de código}
+      dockerfile: docker/app/Dockerfile
+    restart: unless-stopped
+    working_dir: /app/src
+    command:
+      - sh
+      - -ec
+      - |
+        python manage.py collectstatic --noinput --clear
+        exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --threads 4 --timeout 120
+    environment:
+      DJANGO_SECRET_KEY: ${ITAM_STAGING_SECRET_KEY:?Configura la clave de pruebas}
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      DJANGO_STATIC_ROOT: /app/static
+      DATABASE_HOST: itam-db
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: itam_staging
+      DATABASE_USER: itam_staging
+      DATABASE_PASSWORD: ${ITAM_STAGING_DB_PASSWORD:?Configura la contraseña de pruebas}
+    volumes:
+      - ${ITAM_STAGING_CHECKOUT}/src:/app/src:ro
+      - media:/app/src/media
+      - static:/app/static
+    depends_on:
+      itam-db:
+        condition: service_healthy
+    networks: [backend]
+
+  itam-nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ITAM_STAGING_PORT:-18080}:80"
+    volumes:
+      - ./nginx/staging.conf:/etc/nginx/conf.d/default.conf:ro
+      - static:/app/static:ro
+    depends_on:
+      - itam-web
+    networks: [frontend, backend]
+
+volumes:
+  db:
+  media:
+  static:
+
+networks:
+  frontend:
+  backend:
+    internal: true

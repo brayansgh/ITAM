@@ -1,11 +1,41 @@
 from django.contrib import admin
 from django.test import RequestFactory, TestCase
+from django.urls import reverse
 
 from accounts.models import User
 from assignments.models import Assignment, AssignmentStatus
 from employees.models import Employee
 from organizations.models import Company
-from .models import Asset, AssetStatus, Category
+from .models import Asset, AssetStatus, Brand, Category, ModelAsset
+
+
+class ModelAssetAdminTests(TestCase):
+    def setUp(self):
+        self.client.force_login(User.objects.create_superuser(username='catalog_admin'))
+        self.brand = Brand.objects.create(name='Marca de prueba')
+        self.url = reverse('admin:inventory_modelasset_add')
+
+    def test_rejects_duplicate_in_catalog_and_asset_popup(self):
+        ModelAsset.objects.create(name='  Serie A  ', brand=self.brand)
+        popup_url = f'{self.url}?_popup=1&brand={self.brand.pk}'
+        for url in (self.url, popup_url):
+            with self.subTest(url=url):
+                response = self.client.post(url, {'name': ' serie a ', 'brand': self.brand.pk})
+                self.assertContains(response, 'Este modelo ya está registrado para la marca seleccionada.')
+                self.assertEqual(ModelAsset.objects.count(), 1)
+
+    def test_allows_same_name_for_another_brand(self):
+        ModelAsset.objects.create(name='Serie A', brand=self.brand)
+        other_brand = Brand.objects.create(name='Otra marca')
+        response = self.client.post(self.url, {'name': 'Serie A', 'brand': other_brand.pk})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(ModelAsset.objects.filter(name='Serie A', brand=other_brand).exists())
+
+    def test_rejects_duplicate_without_brand(self):
+        ModelAsset.objects.create(name='Serie A')
+        response = self.client.post(self.url, {'name': 'serie a'})
+        self.assertContains(response, 'Este modelo ya está registrado sin marca.')
+        self.assertEqual(ModelAsset.objects.count(), 1)
 
 
 class AssetListTests(TestCase):

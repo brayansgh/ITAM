@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.http import urlencode
 from .models import Category, Brand, ModelAsset, Asset, AssetStatus, AssetSpecs, AssetNetwork, AssetWarranty, DecommissionedAsset
-from .forms import AssetRegistrationForm, AssetWithAssignmentForm
+from .forms import AssetRegistrationForm, AssetWithAssignmentForm, ModelAssetForm
 from django.forms import modelform_factory
 
 @admin.register(Category)
@@ -59,6 +59,7 @@ class BrandAdmin(StandardHistoryAdmin):
 
 @admin.register(ModelAsset)
 class ModelAssetAdmin(StandardHistoryAdmin):
+    form = ModelAssetForm
     list_display = ('name', 'brand', 'created_at')
     fields = ('name', 'brand')
     search_fields = ('name', 'brand__name')

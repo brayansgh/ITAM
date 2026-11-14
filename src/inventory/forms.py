@@ -1,9 +1,32 @@
 from uuid import UUID
 
 from django import forms
+from django.db.models import Value
+from django.db.models.functions import Lower, Trim
 from employees.models import Employee, EmployeeStatus
 
-from .models import Asset, AssetGroup, AssetStatus, Category
+from .models import Asset, AssetGroup, AssetStatus, Category, ModelAsset
+
+
+class ModelAssetForm(forms.ModelForm):
+    class Meta:
+        model = ModelAsset
+        fields = ('name', 'brand')
+
+    def clean(self):
+        data = super().clean()
+        if 'name' not in data or 'brand' not in data:
+            return data
+        if not self.instance._state.adding and not {'name', 'brand'}.intersection(self.changed_data):
+            return data
+
+        duplicates = ModelAsset.objects.filter(brand=data['brand']).alias(
+            normalized_name=Lower(Trim('name')),
+        ).filter(normalized_name=Lower(Value(data['name'])))
+        if duplicates.exclude(pk=self.instance.pk).exists():
+            self.add_error('name', 'Este modelo ya está registrado para la marca seleccionada.'
+                           if data['brand'] else 'Este modelo ya está registrado sin marca.')
+        return data
 
 
 class AssetRegistrationForm(forms.ModelForm):
