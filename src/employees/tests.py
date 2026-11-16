@@ -67,6 +67,22 @@ class OffboardingAuthorizationTests(TestCase):
                 self.client.force_login(self.user(role, True))
                 self.assertEqual(self.client.get(self.url).status_code, 200)
 
+    def test_consultation_cannot_retire_employee_with_active_custody(self):
+        self.employee.status = EmployeeStatus.ACTIVE
+        self.employee.save(update_fields=["status"])
+        self.client.force_login(self.user(Role.CONSULTATION, True))
+        url = reverse("admin:employees_employee_change", args=[self.employee.pk])
+        response = self.client.post(url, {
+            "full_name": self.employee.full_name, "company": self.employee.company_id,
+            "document_type": "CC", "status": EmployeeStatus.RETIRO, "_save": "Guardar",
+        })
+        self.assertEqual(response.status_code, 403)
+        self.employee.refresh_from_db()
+        self.assignment.refresh_from_db()
+        self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
+        self.assertEqual(self.assignment.status, AssignmentStatus.ACTIVE)
+        self.assertFalse(OffboardingRecord.objects.exists())
+
     def test_technology_can_return_assets_and_preserve_audit(self):
         user = support_operator(self.operator)
         self.client.force_login(user)

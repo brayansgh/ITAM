@@ -1,15 +1,21 @@
 #!/bin/bash
 set -euo pipefail
+umask 077
 
 DEST=/srv/backups/itam
-FILE="$DEST/itam-$(date +%F_%H%M).dump"
+mkdir -p -- "$DEST"
+if [[ -L "$DEST" || ! -O "$DEST" || $(stat -c '%a' -- "$DEST") != 700 ]]; then
+    echo "El directorio de respaldos debe pertenecer al usuario actual y tener permisos 0700." >&2
+    exit 1
+fi
+FILE="$DEST/itam-$(date +%F_%H%M%S).dump"
+TEMP=$(mktemp -- "$DEST/.itam-XXXXXXXX.tmp")
+trap 'unlink -- "$TEMP"' EXIT
 
-# Dump a un archivo temporal; solo se renombra si terminó bien
-docker exec itam-db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > "$FILE.tmp"
-mv "$FILE.tmp" "$FILE"
-
-# Verifica que el dump sea legible
-docker exec -i itam-db pg_restore --list < "$FILE" > /dev/null
+docker exec itam-db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > "$TEMP"
+docker exec -i itam-db pg_restore --list < "$TEMP" > /dev/null
+# Publicar de forma atómica sin sustituir otro respaldo con la misma marca de tiempo.
+ln -T -- "$TEMP" "$FILE"
 
 # Borra respaldos de más de 14 días
 find "$DEST" -name "itam-*.dump" -mtime +14 -delete

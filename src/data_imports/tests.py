@@ -285,7 +285,18 @@ class WorkbookImportTests(TestCase):
         self.assertEqual(secure_client.post(edit, self.employee_data).status_code, 403)
         viewer = User.objects.create_user(username="consulta_sintetica", is_staff=True)
         viewer.user_permissions.add(Permission.objects.get(codename="view_stagingasset"))
+        viewer.user_permissions.add(Permission.objects.get(codename="change_stagingasset"))
         self.client.force_login(viewer)
+        detail = reverse("admin:data_imports_stagingasset_change", args=[row.pk])
+        history = reverse("admin:data_imports_stagingasset_history", args=[row.pk])
+        for url in (self.list_url, detail, history, edit, self.upload_url):
+            self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(decision, {"decision": "approve"}).status_code, 403)
+        row.refresh_from_db()
+        self.assertEqual(row.status, ImportStatus.PENDING)
+
+        viewer.user_permissions.remove(Permission.objects.get(codename="change_stagingasset"))
+        viewer.user_permissions.add(*Permission.objects.filter(codename__in=["view_employee", "view_asset"]))
         self.assertNotContains(self.client.get(self.list_url), "Cargar Excel")
         self.assertEqual(self.client.get(self.upload_url).status_code, 403)
         self.assertEqual(self.client.get(reverse("admin:data_imports_workbook")).status_code, 403)

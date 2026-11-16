@@ -72,10 +72,13 @@ class EmployeeAdmin(StandardHistoryAdmin):
                 Employee.objects.select_for_update().filter(pk=obj.pk)
                 .values_list("status", flat=True).first()
             )
-        super().save_model(request, obj, form, change)
-        request.itam_new_retirement = (
+        new_retirement = (
             obj.status == EmployeeStatus.RETIRO and previous_status != EmployeeStatus.RETIRO
         )
+        if new_retirement and not self.can_process_offboarding(request, obj):
+            raise PermissionDenied
+        super().save_model(request, obj, form, change)
+        request.itam_new_retirement = new_retirement
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)
@@ -85,9 +88,6 @@ class EmployeeAdmin(StandardHistoryAdmin):
     def issue_retirement_without_custody(self, request, employee):
         if employee.assignments.filter(status=AssignmentStatus.ACTIVE).exists():
             return None
-        if not self.can_process_offboarding(request, employee):
-            raise PermissionDenied
-
         from inventory.offboarding_pdf import generate_and_save_offboarding_pdf
 
         record = OffboardingRecord(employee=employee, received_by=request.user)

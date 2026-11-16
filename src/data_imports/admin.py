@@ -27,6 +27,27 @@ class StagingAssetAdmin(StandardHistoryAdmin):
     ordering = ("-created_at", "sheet_name", "row_number")
     actions = ("approve_selected", "reject_selected", "publish_selected")
 
+    def can_view_source_records(self, request):
+        # Las notas persistidas comparan los datos del Excel con ambos catálogos.
+        return all(
+            self.admin_site.get_model_admin(model).has_view_permission(request)
+            for model in (Employee, Asset)
+        )
+
+    def has_module_permission(self, request):
+        return self.can_view_source_records(request) and super().has_module_permission(request)
+
+    def has_view_permission(self, request, obj=None):
+        return self.can_view_source_records(request) and super().has_view_permission(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        return self.can_view_source_records(request) and super().has_change_permission(request, obj)
+
+    def history_view(self, request, object_id, extra_context=None):
+        if not self.can_view_source_records(request):
+            raise PermissionDenied
+        return super().history_view(request, object_id, extra_context)
+
     def has_add_permission(self, request):
         return False
 
